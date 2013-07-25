@@ -51,6 +51,7 @@
 
 #include <telepathy-glib/base-connection.h>
 #include <telepathy-glib/dbus.h>
+#include <telepathy-glib/gtypes.h>
 #include <telepathy-glib/errors.h>
 #include <telepathy-glib/interfaces.h>
 
@@ -435,39 +436,6 @@ foreach_dispose (gpointer key,
 }
 
 /* ---------------------------------------------------------------------- */
-/* Insert channel-type specific capabilities into array */
-
-void
-ring_text_manager_add_capabilities(RingTextManager *self,
-  guint handle,
-  GPtrArray *returns)
-{
-  RingTextManagerPrivate *priv = RING_TEXT_MANAGER(self)->priv;
-  char const *id = ring_connection_inspect_contact(priv->connection, handle);
-  guint selfhandle = tp_base_connection_get_self_handle(
-    (TpBaseConnection *)priv->connection);
-  char *destination;
-
-  if (id == NULL)
-    return;
-
-  /* Some UIs create channels even if they do not intend to send anything */
-  /* Allow them to do so */
-
-  destination = ring_text_channel_destination(id);
-
-  if (handle == selfhandle || modem_sms_is_valid_address (destination)) {
-    g_ptr_array_add(returns,
-      ring_contact_capability_new(handle,
-        TP_IFACE_CHANNEL_TYPE_TEXT,
-        TP_CONNECTION_CAPABILITY_FLAG_CREATE,
-        RING_TEXT_CHANNEL_CAPABILITY_FLAGS));
-  }
-
-  g_free(destination);
-}
-
-/* ---------------------------------------------------------------------- */
 /* TpChannelManagerIface interface */
 
 static char const * const ring_text_channel_fixed_properties_list[] =
@@ -627,6 +595,62 @@ static gboolean tp_asv_get_sms_channel (GHashTable *properties)
     return g_value_get_boolean (value);
 }
 
+
+/* ---------------------------------------------------------------------- */
+/* Insert channel-type specific capabilities into array */
+
+void
+ring_text_manager_add_capabilities(RingTextManager *self,
+  guint handle,
+  GPtrArray *returns)
+{
+  RingTextManagerPrivate *priv = RING_TEXT_MANAGER(self)->priv;
+  char const *id = ring_connection_inspect_contact(priv->connection, handle);
+  guint selfhandle = tp_base_connection_get_self_handle(
+    (TpBaseConnection *)priv->connection);
+  char *destination;
+
+  if (id == NULL)
+    return;
+
+  /* Some UIs create channels even if they do not intend to send anything */
+  /* Allow them to do so */
+
+  destination = ring_text_channel_destination(id);
+
+  if (handle == selfhandle || modem_sms_is_valid_address (destination)) {
+    g_ptr_array_add(returns,
+      ring_contact_capability_new(handle,
+        TP_IFACE_CHANNEL_TYPE_TEXT,
+        TP_CONNECTION_CAPABILITY_FLAG_CREATE,
+        RING_TEXT_CHANNEL_CAPABILITY_FLAGS));
+  }
+
+  g_free(destination);
+}
+
+void
+ring_text_manager_add_contact_capabilities(RingTextManager *self,
+  TpHandle Handle,
+  GPtrArray *array)
+{
+  GValue rcc = {0, };
+  GHashTable *fixed_properties;
+
+  g_value_init(&rcc, TP_STRUCT_TYPE_REQUESTABLE_CHANNEL_CLASS);
+  g_value_take_boxed(&rcc,
+      dbus_g_type_specialized_construct(
+          TP_STRUCT_TYPE_REQUESTABLE_CHANNEL_CLASS));
+
+  fixed_properties = ring_text_channel_fixed_properties();
+
+  dbus_g_type_struct_set(&rcc,
+      0, fixed_properties,
+      1, ring_text_channel_allowed_properties,
+      G_MAXUINT);
+
+  g_ptr_array_add(array, g_value_get_boxed(&rcc));
+}
 
 /* ---------------------------------------------------------------------- */
 /* RingTextManager interface */

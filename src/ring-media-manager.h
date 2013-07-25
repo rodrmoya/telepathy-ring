@@ -72,6 +72,9 @@ RingEmergencyServiceInfoList *ring_media_manager_emergency_services(
 void ring_media_manager_add_capabilities(RingMediaManager *,
   TpHandle, GPtrArray *);
 
+void ring_media_manager_add_contact_capabilities(RingMediaManager *self,
+  TpHandle Handle, GPtrArray *array);
+
 void ring_media_manager_emit_new_channel(RingMediaManager *self,
   gpointer request, gpointer channel, GError *error);
 

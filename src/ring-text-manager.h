@@ -80,6 +80,9 @@ char **ring_text_manager_list_stored_messages(RingTextManager const *);
 void ring_text_manager_add_capabilities(RingTextManager *self,
   guint handle, GPtrArray *returns);
 
+void ring_text_manager_add_contact_capabilities(RingTextManager *self,
+  guint handle, GPtrArray *array);
+
 G_END_DECLS
 
 #endif
