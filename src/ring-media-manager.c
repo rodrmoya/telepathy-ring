@@ -703,7 +703,7 @@ ring_media_requestotron(RingMediaManager *self,
   if (tp_asv_get_initial_video (properties, FALSE))
     {
       tp_channel_manager_emit_request_failed (self, request,
-          TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+          TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
           "Video calls are not supported");
       return TRUE;
     }
@@ -720,7 +720,7 @@ ring_media_requestotron(RingMediaManager *self,
 
     if (!modem_call_validate_address(target_id, &error)) {
       tp_channel_manager_emit_request_failed(
-        self, request, TP_ERRORS, TP_ERROR_INVALID_HANDLE, error->message);
+        self, request, TP_ERROR, TP_ERROR_INVALID_HANDLE, error->message);
       g_error_free(error);
       return TRUE;
     }
@@ -728,7 +728,7 @@ ring_media_requestotron(RingMediaManager *self,
     else if (strchr(target_id, 'w')) {
       tp_channel_manager_emit_request_failed(
         self, request,
-        TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+        TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
         "Dial strings containing 'w' are not supported");
       return TRUE;
     }
@@ -758,13 +758,13 @@ ring_media_manager_validate_initial_members(RingMediaManager *self,
   GError **error)
 {
   if (initial == NULL) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "No initial members");
     return FALSE;
   }
 
   if (initial->len != 2) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Expecting exactly two initial members");
     return FALSE;
   }
@@ -775,14 +775,14 @@ ring_media_manager_validate_initial_members(RingMediaManager *self,
     ring_media_manager_lookup(self, initial->odata[1]);
 
   if (ch1 == ch2) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Expecting distinct initial members");
     return FALSE;
   }
 
   if (!RING_IS_MEMBER_CHANNEL(ch1) ||
     !RING_IS_MEMBER_CHANNEL(ch2)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Initial member is not a MediaStream channel");
     return FALSE;
   }

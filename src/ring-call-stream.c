@@ -56,7 +56,7 @@ ring_call_stream_set_sending (
     gboolean send,
     DBusGMethodInvocation *context)
 {
-  GError error = { TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
       "SetSending is not supported for cellular calls." };
 
  /* Maybe we should put the call on hold/resume? */
@@ -71,7 +71,7 @@ ring_call_stream_request_receiving (
     gboolean receive,
     DBusGMethodInvocation *context)
 {
-  GError error = { TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
       "RequestReceiving is not supported for cellular calls." };
 
   dbus_g_method_return_error (context, &error);

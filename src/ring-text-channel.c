@@ -559,7 +559,7 @@ ring_text_channel_send(GObject *_self,
   if (!type[0])
     type = my_message_mixin_get_string(msg, 1, "type", "");
   if (!type[0]) {
-    GError invalid = { TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, "No content type" };
+    GError invalid = { TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "No content type" };
     tp_message_mixin_sent(_self, msg, flags, NULL, &invalid);
     return;
   }
@@ -567,7 +567,7 @@ ring_text_channel_send(GObject *_self,
   if (sms_service == NULL)
     {
       GError failed = {
-        TP_ERRORS, TP_ERROR_NOT_AVAILABLE, "SMS service is not available"
+        TP_ERROR, TP_ERROR_NOT_AVAILABLE, "SMS service is not available"
       };
       tp_message_mixin_sent (_self, msg, flags, NULL, &failed);
       return;
@@ -610,12 +610,12 @@ ring_text_channel_send(GObject *_self,
       encoded = sms_g_submit_binary(submit, binary, &error);
     }
     else {
-      g_set_error(&error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, "No content");
+      g_set_error(&error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "No content");
     }
   }
 #endif
   else {
-    g_set_error(&error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, "Unknown content type");
+    g_set_error(&error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "Unknown content type");
   }
 
   request = modem_sms_request_send (sms_service,
@@ -623,7 +623,7 @@ ring_text_channel_send(GObject *_self,
       modem_sms_request_send_reply, self);
 
   if (request == NULL) {
-    GError failed = { TP_ERRORS, TP_ERROR_NETWORK_ERROR,
+    GError failed = { TP_ERROR, TP_ERROR_NETWORK_ERROR,
                       "Modem connection failed" };
     tp_message_mixin_sent(_self, msg, flags, NULL, &failed);
     return;
@@ -657,11 +657,11 @@ modem_sms_request_send_reply(ModemSMSService *service,
   }
   else {
     if (send_error && send_error->domain == DBUS_GERROR)
-      g_set_error_literal(&error, TP_ERRORS, TP_ERROR_NETWORK_ERROR, send_error->message);
+      g_set_error_literal(&error, TP_ERROR, TP_ERROR_NETWORK_ERROR, send_error->message);
     else if (send_error)
       error = g_error_copy(send_error);
     else
-      g_set_error_literal(&error, TP_ERRORS, TP_ERROR_NETWORK_ERROR, "Internal error");
+      g_set_error_literal(&error, TP_ERROR, TP_ERROR_NETWORK_ERROR, "Internal error");
 
     DEBUG("Send(%p) GError(%u, '%s, %s)",
       msg, error->code, g_quark_to_string(error->domain), error->message);
@@ -907,7 +907,7 @@ ring_text_channel_delivery_report(RingTextChannel *self,
         "%s.%s", prefix, modem_error_name(error, ebuffer, sizeof ebuffer));
       tp_message_set_string(msg, 0, "delivery-error-message", error->message);
     }
-    else if (error->domain == TP_ERRORS) {
+    else if (error->domain == TP_ERROR) {
       GEnumClass *klass = g_type_class_ref(TP_TYPE_ERROR);
       GEnumValue *ev = g_enum_get_value (klass, error->code);
 
