@@ -278,7 +278,7 @@ ring_mergeable_conference_merge(RingSvcChannelInterfaceMergeableConference *ifac
     channel_path);
 
   if (!member || !RING_IS_MEMBER_CHANNEL(member)) {
-    error = g_error_new(TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    error = g_error_new(TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
             "Invalid channel path");
   }
   else if (!ring_member_channel_can_become_member(member, &error)) {
@@ -355,7 +355,7 @@ ring_conference_channel_dtmf_start_tone(TpSvcChannelInterfaceDTMF *iface,
   else
     {
       GError error[] = {{
-          TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+          TP_ERROR, TP_ERROR_NOT_AVAILABLE,
           "No member channels to send DTMFs through"
         }};
       dbus_g_method_return_error(context, error);
@@ -384,7 +384,7 @@ ring_conference_channel_dtmf_stop_tone(TpSvcChannelInterfaceDTMF *iface,
   else
     {
       GError error[] = {{
-          TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+          TP_ERROR, TP_ERROR_NOT_AVAILABLE,
           "No member channels to send DTMFs through"
         }};
       dbus_g_method_return_error(context, error);
@@ -506,7 +506,7 @@ void ring_conference_channel_request_hold (TpSvcChannelInterfaceHold *iface,
 
   if (priv->conf_created == FALSE)
     {
-      g_set_error (&error, TP_ERRORS, TP_ERROR_DISCONNECTED,
+      g_set_error (&error, TP_ERROR, TP_ERROR_DISCONNECTED,
           "No conference call available");
     }
   else if (hold == priv->hold.state ||
@@ -753,7 +753,7 @@ ring_conference_channel_validate_media_handle(RingConferenceChannel *_self,
   GError **error)
 {
   if (*handlep != 0) {
-    g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Conference channel carries a multiparty stream only");
     return FALSE;
   }
@@ -1295,7 +1295,7 @@ ring_conference_channel_remove_member_with_reason(GObject *iface,
   }
 
   if (tp_intset_size(removing) == 0) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_PERMISSION_DENIED,
+    g_set_error(error, TP_ERROR, TP_ERROR_PERMISSION_DENIED,
       "handle %u cannot be removed", handle);
     goto error;
   }
@@ -1611,7 +1611,7 @@ ring_conference_channel_join(RingConferenceChannel *self,
   int i;
 
   if (!RING_IS_CONFERENCE_CHANNEL(self)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Not a Conference Channel");
     return FALSE;
   }

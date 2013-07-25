@@ -570,7 +570,7 @@ conference_requestotron (RingConferenceManager *self,
   if (self->priv->call_service == NULL)
     {
       tp_channel_manager_emit_request_failed (self, request,
-          TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+          TP_ERROR, TP_ERROR_NOT_AVAILABLE,
           "Modem does not support conferences");
       return TRUE;
     }
@@ -582,7 +582,7 @@ conference_requestotron (RingConferenceManager *self,
   if (initial_video)
     {
       tp_channel_manager_emit_request_failed (self, request,
-          TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+          TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
           "Video calls are not supported");
       return TRUE;
     }
@@ -591,7 +591,7 @@ conference_requestotron (RingConferenceManager *self,
           TP_IFACE_CHANNEL ".TargetHandleType", NULL) != 0)
     {
       tp_channel_manager_emit_request_failed (self, request,
-          TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+          TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
           "Invalid TargetHandleType");
       return TRUE;
     }
@@ -633,13 +633,13 @@ ring_conference_manager_validate_initial_members (RingConferenceManager *self,
   RingMemberChannel *ch1, *ch2;
 
   if (initial == NULL) {
-    g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
         "No initial members");
     return FALSE;
   }
 
   if (initial->len != 2) {
-    g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
         "Expecting exactly two initial members");
     return FALSE;
   }
@@ -648,13 +648,13 @@ ring_conference_manager_validate_initial_members (RingConferenceManager *self,
   ch2 = ring_connection_lookup_channel (priv->connection, initial->odata[1]);
 
   if (ch1 == ch2) {
-    g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
         "Expecting distinct initial members");
     return FALSE;
   }
 
   if (!RING_IS_MEMBER_CHANNEL (ch1) || !RING_IS_MEMBER_CHANNEL (ch2)) {
-    g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
         "Initial member is not a MediaStream channel");
     return FALSE;
   }

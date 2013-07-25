@@ -296,7 +296,7 @@ ring_method_return_internal_error(gpointer _context)
 {
   GError error =
     {
-      TP_ERRORS, TP_ERROR_DISCONNECTED, "Internal error - request canceled"
+      TP_ERROR, TP_ERROR_DISCONNECTED, "Internal error - request canceled"
     };
   dbus_g_method_return_error((DBusGMethodInvocation *)_context, &error);
 }

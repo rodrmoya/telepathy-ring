@@ -568,14 +568,14 @@ param_filter_isdn(TpCMParamSpec const *paramspec,
 
     if (!strchr("0123456789", *str)) {
       if (error)
-        g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+        g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
           "Account parameter '%s' with invalid ISDN number",
           paramspec->name);
       return FALSE;
     }
     else if (++len > 20) {
       if (error)
-        g_set_error (error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+        g_set_error (error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
           "Account parameter '%s' with ISDN number too long",
           paramspec->name);
       return FALSE;
@@ -600,7 +600,7 @@ param_filter_validity(TpCMParamSpec const *paramspec,
   if (5 * 60 <= validity && validity <= 63 * 7 * 24 * 60 * 60)
     return TRUE;
 
-  g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+  g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
     "Account parameter '%s' with invalid validity period - "
     "default (0), minimum 5 minutes (%u), maximum 63 weeks (%u)",
     paramspec->name, 5 * 60, 63 * 7 * 24 * 60 * 60);
@@ -621,7 +621,7 @@ param_filter_anon_modes(TpCMParamSpec const *paramspec,
   if (modes == 0)
     return TRUE;
 
-  g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+  g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
     "Account parameter '%s' with invalid value",
     paramspec->name);
 
@@ -819,7 +819,7 @@ ring_normalize_contact (char const *input,
   if (g_utf8_strlen(input, -1) <= 11)
     return strcpy(s, input);
 
-  *return_error = g_error_new(TP_ERRORS,
+  *return_error = g_error_new(TP_ERROR,
                   TP_ERROR_INVALID_ARGUMENT, "invalid phone number");
   g_free(s);
   return NULL;
@@ -1127,13 +1127,10 @@ ring_connection_start_connecting(TpBaseConnection *base,
   RingConnectionPrivate *priv = self->priv;
   ModemService *manager;
   Modem *modem;
-  GError *error = NULL;
 
   DEBUG("called");
 
   g_assert(base->status == TP_INTERNAL_CONNECTION_STATUS_NEW);
-
-  error = NULL;
 
   priv->connecting_source = g_timeout_add_seconds (30,
       ring_connection_connecting_timeout, self);
@@ -1384,7 +1381,7 @@ ring_connection_cellular_properties_setter(GObject *object,
   TpCMParamSpec const *param_spec;
 
   if (name == NULL) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_PERMISSION_DENIED,
+    g_set_error(error, TP_ERROR, TP_ERROR_PERMISSION_DENIED,
       "This property is read-only");
     return FALSE;
   }
@@ -1399,7 +1396,7 @@ ring_connection_cellular_properties_setter(GObject *object,
     param_spec = CELLULAR_SMS_REDUCED_CHARSET_PARAM_SPEC;
   }
   else  {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Unknown property");
     return FALSE;
   }

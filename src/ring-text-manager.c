@@ -670,7 +670,7 @@ ring_text_manager_request(RingTextManager *self,
       DEBUG("%s", message);
       if (request)
         tp_channel_manager_emit_request_failed(self,
-          request, TP_ERRORS, TP_ERROR_NOT_AVAILABLE, message);
+          request, TP_ERROR, TP_ERROR_NOT_AVAILABLE, message);
       g_assert(request);
       g_free(message);
       return NULL;
@@ -999,7 +999,7 @@ static void
 ring_text_manager_not_connected(gpointer context)
 {
   GError error =
-    { TP_ERRORS, TP_ERROR_NOT_AVAILABLE, "SMS service is not available" };
+    { TP_ERROR, TP_ERROR_NOT_AVAILABLE, "SMS service is not available" };
   dbus_g_method_return_error(context, &error);
 }
 

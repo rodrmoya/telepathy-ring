@@ -832,13 +832,13 @@ ring_call_channel_validate_media_handle (gpointer _self,
     return FALSE;
 
   if (handle == mixin->self_handle) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "cannot establish call streams with yourself");
     return FALSE;
   }
 
   if (!modem_call_is_valid_address(tp_handle_inspect(repo, handle))) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Invalid handle %u=\"%s\" for media streams",
       handle, tp_handle_inspect(repo, handle));
     return FALSE;
@@ -848,7 +848,7 @@ ring_call_channel_validate_media_handle (gpointer _self,
     !tp_handle_set_is_member(self->group.remote_pending, handle) &&
     handle != tp_base_channel_get_target_handle (base)) {
     g_set_error(error,
-      TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+      TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "given handle %u is not a member of the channel",
       handle);
     return FALSE;
@@ -881,13 +881,13 @@ ring_call_channel_create_streams (gpointer _self,
     g_object_set(self, "peer", handle, NULL);
 
   if (handle != priv->peer_handle) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, "Invalid handle");
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "Invalid handle");
     return FALSE;
   }
 
   if (call_service == NULL)
     {
-      g_set_error (error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+      g_set_error (error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
           "Modem does not support voice calls");
       return FALSE;
     }
@@ -945,7 +945,7 @@ ring_call_channel_create(RingCallChannel *self, GError **error)
     handle);
 
   if (RING_STR_EMPTY(destination)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, "Invalid handle");
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "Invalid handle");
     return NULL;
   }
 
@@ -1266,7 +1266,7 @@ ring_call_channel_remove_member_with_reason(GObject *iface,
   DEBUG("enter");
 
   if (handle != mixin->self_handle && handle != priv->peer_handle) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_PERMISSION_DENIED,
+    g_set_error(error, TP_ERROR, TP_ERROR_PERMISSION_DENIED,
       "handle %u cannot be removed", handle);
     return FALSE;
   }
@@ -1317,7 +1317,7 @@ ring_call_channel_request_remote(GObject *iface,
   g_assert(handle != 0);
 
   if (!modem_call_is_valid_address(destination)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Invalid handle for media channel");
     return FALSE;
   }
@@ -1329,7 +1329,7 @@ ring_call_channel_request_remote(GObject *iface,
     return TRUE;
   }
   else {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Only one target allowed for media channel");
     return FALSE;
   }
@@ -1395,7 +1395,7 @@ ring_call_channel_accept_pending(GObject *iface,
   DEBUG("accepting an incoming call");
 
   if (self->base.call_instance == NULL) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
       "Missing call instance");
     return FALSE;
   }
@@ -1403,7 +1403,7 @@ ring_call_channel_accept_pending(GObject *iface,
   g_object_get(self->base.call_instance, "state", &state, NULL);
 
   if (state == MODEM_CALL_STATE_DISCONNECTED) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
       "Invalid call state");
     return FALSE;
   }
@@ -1737,7 +1737,7 @@ ring_member_channel_can_become_member(RingMemberChannel const *iface,
   GError **error)
 {
   if (!iface || !RING_IS_CALL_CHANNEL(iface)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Member is not valid channel object");
     return FALSE;
   }
@@ -1746,24 +1746,24 @@ ring_member_channel_can_become_member(RingMemberChannel const *iface,
   RingCallChannelPrivate const *priv = self->priv;
 
   if (!priv->peer_handle) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Member channel has no target");
     return FALSE;
   }
   if (priv->member.conference) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Member channel is already in conference");
     return FALSE;
   }
 
   if (!self->base.call_instance) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Member channel has no ongoing call");
     return FALSE;
   }
 
   if (!modem_call_can_join(self->base.call_instance)) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
       "Member channel in state %s",
       modem_call_get_state_name(
         modem_call_get_state(self->base.call_instance)));
@@ -1833,12 +1833,12 @@ ring_member_channel_release(RingMemberChannel *iface,
   RingCallChannelPrivate *priv = self->priv;
 
   if (priv->release.message) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE, "already releasing");
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE, "already releasing");
     return FALSE;
   }
 
   if (self->base.call_instance == NULL) {
-    g_set_error(error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE, "no call instance");
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE, "no call instance");
     return FALSE;
   }
 
@@ -1948,7 +1948,7 @@ ring_member_channel_method_split(
     return;
   }
 
-  g_set_error(&error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+  g_set_error(&error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
     "Not a member channel");
   dbus_g_method_return_error(context, error);
   g_error_free(error);
@@ -1971,7 +1971,7 @@ ring_call_channel_request_split_reply(ModemCall *instance,
     DEBUG("split failed: " GERROR_MSG_FMT, GERROR_MSG_CODE(error));
 
     GError tperror[1] = {{
-        TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+        TP_ERROR, TP_ERROR_NOT_AVAILABLE,
         "Cannot LeaveConference"
       }};
 

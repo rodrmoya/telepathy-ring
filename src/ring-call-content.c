@@ -82,7 +82,6 @@ static void
 ring_call_content_class_init (RingCallContentClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  TpBaseCallContentClass *base_class = TP_BASE_CALL_CONTENT_CLASS(klass);
 
   object_class->constructed = ring_call_content_constructed;
   object_class->dispose = ring_call_content_dispose;
@@ -123,7 +122,7 @@ ring_call_content_remove (
    * this. But I think having a less generic error message is worth thirty(!)
    * lines of boilerplate.
    */
-  GError error = { TP_ERRORS, TP_ERROR_NOT_IMPLEMENTED,
+  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
       "Removing contents is not supported for cellular calls." };
 
   dbus_g_method_return_error (context, &error);
