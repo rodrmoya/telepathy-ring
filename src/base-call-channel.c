@@ -152,7 +152,6 @@ ring_base_call_channel_class_init (
 
   object_class->get_property = ring_base_call_channel_get_property;
   object_class->set_property = ring_base_call_channel_set_property;
-
   object_class->dispose = ring_base_call_channel_dispose;
   object_class->finalize = ring_base_call_channel_finalize;
 

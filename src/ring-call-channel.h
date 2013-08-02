@@ -26,6 +26,8 @@
 #include <glib-object.h>
 #include <telepathy-glib/group-mixin.h>
 #include <telepathy-glib/dbus-properties-mixin.h>
+#include <modem/call.h>
+#include <base-call-channel.h>
 
 G_BEGIN_DECLS
 
@@ -40,14 +42,16 @@ G_END_DECLS
 G_BEGIN_DECLS
 
 struct _RingCallChannelClass {
-  RingMediaChannelClass base_class;
+  RingBaseCallChannelClass base_class;
   TpGroupMixinClass group_class;
   TpDBusPropertiesMixinClass dbus_properties_class;
 };
 
 struct _RingCallChannel {
-  RingMediaChannel base;
+  RingBaseCallChannel base;
   TpGroupMixin group;
+  ModemCall *call_instance;
+  char *nick;
   RingCallChannelPrivate *priv;
 };
 

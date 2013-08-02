@@ -476,7 +476,7 @@ ring_call_channel_fixed_properties(void)
 
   key = TP_IFACE_CHANNEL ".ChannelType";
   value = tp_g_value_slice_new(G_TYPE_STRING);
-  g_value_set_static_string(value, TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA);
+  g_value_set_static_string(value, TP_IFACE_CHANNEL_TYPE_CALL);
 
   g_hash_table_insert(hash, (gpointer)key, value);
 
@@ -487,8 +487,8 @@ static char const * const ring_call_channel_allowed_properties[] =
 {
   TP_IFACE_CHANNEL ".TargetHandle",
   TP_IFACE_CHANNEL ".TargetID",
-  TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA ".InitialAudio",
-  TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA ".InitialVideo",
+  TP_IFACE_CHANNEL_TYPE_CALL ".InitialAudio",
+  TP_IFACE_CHANNEL_TYPE_CALL ".InitialVideo",
   NULL
 };
 
@@ -513,7 +513,7 @@ ring_anon_channel_fixed_properties(void)
 
   key = TP_IFACE_CHANNEL ".ChannelType";
   value = tp_g_value_slice_new(G_TYPE_STRING);
-  g_value_set_static_string(value, TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA);
+  g_value_set_static_string(value, TP_IFACE_CHANNEL_TYPE_CALL);
 
   g_hash_table_insert(hash, (gpointer)key, value);
 
@@ -636,7 +636,7 @@ ring_media_manager_add_capabilities(RingMediaManager *self,
     if (priv->capability_flags)
       g_ptr_array_add(returns,
         ring_contact_capability_new(handle,
-          TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA,
+          TP_IFACE_CHANNEL_TYPE_CALL,
           TP_CONNECTION_CAPABILITY_FLAG_CREATE |
           TP_CONNECTION_CAPABILITY_FLAG_INVITE,
           RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));
@@ -644,7 +644,7 @@ ring_media_manager_add_capabilities(RingMediaManager *self,
   else if (modem_call_is_valid_address (id)) {
     g_ptr_array_add(returns,
       ring_contact_capability_new(handle,
-        TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA,
+        TP_IFACE_CHANNEL_TYPE_CALL,
         TP_CONNECTION_CAPABILITY_FLAG_CREATE |
         TP_CONNECTION_CAPABILITY_FLAG_INVITE,
         RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));

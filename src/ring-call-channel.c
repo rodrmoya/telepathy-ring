@@ -150,8 +150,6 @@ enum
   LAST_PROPERTY
 };
 
-static void ring_call_channel_implement_media_channel(RingMediaChannelClass *);
-
 static TpDBusPropertiesMixinIfaceImpl
 ring_call_channel_dbus_property_interfaces[];
 static void ring_channel_call_state_iface_init(gpointer, gpointer);
@@ -171,7 +169,7 @@ static gboolean ring_call_channel_remote_pending(
   RingCallChannel *, TpHandle handle, const char *message);
 
 G_DEFINE_TYPE_WITH_CODE(
-  RingCallChannel, ring_call_channel, RING_TYPE_MEDIA_CHANNEL,
+  RingCallChannel, ring_call_channel, RING_TYPE_BASE_CALL_CHANNEL,
   G_IMPLEMENT_INTERFACE(RING_TYPE_MEMBER_CHANNEL, NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
     tp_group_mixin_iface_init);
@@ -443,6 +441,10 @@ ring_call_channel_dispose(GObject *object)
 
   priv->member.handle = 0;
 
+  /* If still holding on to a call instance, disconnect */
+  if (self->call_instance)
+    ring_call_channel_set_call_instance (self, NULL);
+
   ((GObjectClass *)ring_call_channel_parent_class)->dispose(object);
 }
 
@@ -486,8 +488,6 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
   base_chan_class->interfaces = ring_call_channel_interfaces;
   base_chan_class->target_handle_type = TP_HANDLE_TYPE_CONTACT;
   base_chan_class->fill_immutable_properties = ring_call_channel_fill_immutable_properties;
-
-  ring_call_channel_implement_media_channel (RING_MEDIA_CHANNEL_CLASS(klass));
 
   klass->dbus_properties_class.interfaces =
     ring_call_channel_dbus_property_interfaces;
@@ -557,17 +557,42 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
       G_PARAM_READWRITE | G_PARAM_CONSTRUCT |
       G_PARAM_STATIC_STRINGS));
 
-  g_object_class_override_property(
-    object_class, PROP_MEMBER, "member-handle");
+  g_object_class_install_property(
+    object_class, PROP_MEMBER,
+    g_param_spec_uint("member-handle",
+      "Member Handle",
+      "Handle representing the channel target in conference",
+      0, G_MAXUINT, 0,
+      G_PARAM_READABLE |
+      G_PARAM_STATIC_STRINGS));
 
-  g_object_class_override_property(
-    object_class, PROP_MEMBER_MAP, "member-map");
+  g_object_class_install_property(
+    object_class, PROP_MEMBER_MAP,
+    g_param_spec_boxed("member-map",
+      "Mapping from peer to member handle",
+      "Mapping from peer to member handle",
+      TP_HASH_TYPE_HANDLE_OWNER_MAP,
+      G_PARAM_READABLE |
+      G_PARAM_STATIC_STRINGS));
 
-  g_object_class_override_property(
-    object_class, PROP_CONFERENCE, "member-conference");
+  g_object_class_install_property(
+    object_class, PROP_CONFERENCE,
+    g_param_spec_boxed("member-conference",
+      "Conference Channel",
+      "Conference Channel this object is associated with",
+      DBUS_TYPE_G_OBJECT_PATH,
+      G_PARAM_READABLE |
+      G_PARAM_STATIC_STRINGS));
 
-  g_object_class_override_property(
-    object_class, PROP_PEER, "peer");
+  g_object_class_install_property(
+    object_class, PROP_PEER,
+    g_param_spec_uint("peer",
+      "Peer handle",
+      "Peer handle for this channel",
+      0, G_MAXUINT, 0,
+      G_PARAM_READWRITE |
+      G_PARAM_CONSTRUCT |
+      G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property(
     object_class, PROP_INITIAL_REMOTE,
@@ -649,10 +674,10 @@ ring_call_channel_close(RingMediaChannel *_self, gboolean immediately)
     g_assert(priv->member.conference == NULL);
   }
 
-  if (self->base.call_instance) {
+  if (self->call_instance) {
     if (!priv->release.message)
       priv->release.message = g_strdup("Channel closed");
-    modem_call_request_release(self->base.call_instance, NULL, NULL);
+    modem_call_request_release(self->call_instance, NULL, NULL);
     return immediately;
   }
   else if (priv->creating_call) {
@@ -732,7 +757,7 @@ ring_call_channel_play_error_tone(RingCallChannel *self,
 
   guint hold;
 
-  if (!self->base.call_instance)
+  if (!self->call_instance)
     return;
 
   event_tone = modem_call_event_tone(state, causetype, cause);
@@ -781,7 +806,7 @@ ring_call_channel_set_call_instance(RingMediaChannel *_self,
 #undef CONNECT
   }
   else {
-    ci = self->base.call_instance;
+    ci = self->call_instance;
 
 #define DISCONNECT(n)                                           \
     if (priv->signals.n &&                                      \
@@ -1008,7 +1033,7 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
   }
 
   if (ci) {
-    g_assert(self->base.call_instance == NULL);
+    g_assert(self->call_instance == NULL);
     g_object_set(self, "call-instance", ci, NULL);
     if (priv->release.message == NULL)
       ring_media_channel_set_state(RING_MEDIA_CHANNEL(self),
@@ -1041,20 +1066,6 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
 
   if (!ring_media_channel_is_playing(RING_MEDIA_CHANNEL(self)))
     ring_media_channel_close(RING_MEDIA_CHANNEL(self));
-}
-
-static void
-ring_call_channel_implement_media_channel(RingMediaChannelClass *media_class)
-{
-  media_class->emit_initial = ring_call_channel_emit_initial;
-  media_class->close = ring_call_channel_close;
-  media_class->update_state = ring_call_channel_update_state;
-  media_class->set_call_instance = ring_call_channel_set_call_instance;
-
-  ring_streamed_media_mixin_class_init (G_OBJECT_CLASS(media_class),
-      G_STRUCT_OFFSET(RingCallChannelClass, base_class.streamed_media_class),
-      ring_call_channel_validate_media_handle,
-      ring_call_channel_create_streams);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1273,11 +1284,11 @@ ring_call_channel_remove_member_with_reason(GObject *iface,
     TP_CHANNEL_GROUP_FLAG_CAN_REMOVE |
     TP_CHANNEL_GROUP_FLAG_CAN_RESCIND);
 
-  if (self->base.call_instance) {
+  if (self->call_instance) {
     priv->release.message = g_strdup(message ? message : "Call released");
     priv->release.actor = mixin->self_handle;
     priv->release.reason = reason;
-    modem_call_request_release(self->base.call_instance, NULL, NULL);
+    modem_call_request_release(self->call_instance, NULL, NULL);
   }
   else {
     /* Remove handle from set */
@@ -1388,13 +1399,13 @@ ring_call_channel_accept_pending(GObject *iface,
 
   DEBUG("accepting an incoming call");
 
-  if (self->base.call_instance == NULL) {
+  if (self->call_instance == NULL) {
     g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
       "Missing call instance");
     return FALSE;
   }
 
-  g_object_get(self->base.call_instance, "state", &state, NULL);
+  g_object_get(self->call_instance, "state", &state, NULL);
 
   if (state == MODEM_CALL_STATE_DISCONNECTED) {
     g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
@@ -1405,8 +1416,8 @@ ring_call_channel_accept_pending(GObject *iface,
   if (!self->priv->accepted)
     self->priv->accepted = g_strdup(message ? message : "Call accepted");
 
-  modem_call_request_answer(self->base.call_instance, reply_to_answer,
-      g_strdup(self->base.nick));
+  modem_call_request_answer(self->call_instance, reply_to_answer,
+      g_strdup(self->nick));
 
   return TRUE;
 }
@@ -1750,17 +1761,17 @@ ring_member_channel_can_become_member(RingMemberChannel const *iface,
     return FALSE;
   }
 
-  if (!self->base.call_instance) {
+  if (!self->call_instance) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Member channel has no ongoing call");
     return FALSE;
   }
 
-  if (!modem_call_can_join(self->base.call_instance)) {
+  if (!modem_call_can_join(self->call_instance)) {
     g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
       "Member channel in state %s",
       modem_call_get_state_name(
-        modem_call_get_state(self->base.call_instance)));
+        modem_call_get_state(self->call_instance)));
     return FALSE;
   }
 
@@ -1831,7 +1842,7 @@ ring_member_channel_release(RingMemberChannel *iface,
     return FALSE;
   }
 
-  if (self->base.call_instance == NULL) {
+  if (self->call_instance == NULL) {
     g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE, "no call instance");
     return FALSE;
   }
@@ -1842,7 +1853,7 @@ ring_member_channel_release(RingMemberChannel *iface,
   priv->release.actor = TP_GROUP_MIXIN(iface)->self_handle;
   priv->release.reason = reason;
 
-  modem_call_request_release(self->base.call_instance, NULL, NULL);
+  modem_call_request_release(self->call_instance, NULL, NULL);
 
   return TRUE;
 }
@@ -1872,7 +1883,7 @@ ring_member_channel_joined(RingMemberChannel *iface,
   priv->member.conference = g_object_ref(conference);
 
   DEBUG("%s joined conference %s",
-    RING_MEDIA_CHANNEL(self)->nick,
+    self->nick,
     RING_CONFERENCE_CHANNEL(conference)->nick);
 }
 
@@ -1925,14 +1936,14 @@ ring_member_channel_method_split(
        * Make sure the remaining call is unheld to follow
        * Split() semantics the callerexpects.
        **/
-      modem_call_request_hold(self->base.call_instance,
+      modem_call_request_hold(self->call_instance,
           0, NULL, context);
 
       return;
     }
 
     ModemRequest *request;
-    request = modem_call_request_split(self->base.call_instance,
+    request = modem_call_request_split(self->call_instance,
               ring_call_channel_request_split_reply,
               context);
     modem_request_add_data_full(request,

@@ -37,13 +37,13 @@ typedef struct _RingBaseCallChannelPrivate RingBaseCallChannelPrivate;
 typedef struct _RingBaseCallChannelClass RingBaseCallChannelClass;
 
 struct _RingBaseCallChannelClass {
-    TpBaseMediaCallChannelClass parent_class;
+  TpBaseMediaCallChannelClass parent_class;
 };
 
 struct _RingBaseCallChannel {
-    TpBaseMediaCallChannel parent;
+  TpBaseMediaCallChannel parent;
 
-    RingBaseCallChannelPrivate *priv;
+  RingBaseCallChannelPrivate *priv;
 };
 
 GType ring_base_call_channel_get_type (void);
