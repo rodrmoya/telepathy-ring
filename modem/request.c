@@ -308,7 +308,7 @@ _modem_request_destroy_notify (gpointer _request)
       GDestroyNotify destroy = notify->destroy;
       gpointer data = notify->data;
 
-      memset (notify, 0, sizeof notify);
+      memset (notify, 0, sizeof *notify);
 
       if (destroy)
         destroy (data);
