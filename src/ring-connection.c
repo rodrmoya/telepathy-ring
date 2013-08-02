@@ -230,7 +230,6 @@ ring_connection_constructed(GObject *object)
   repo = tp_base_connection_get_handles(base, TP_HANDLE_TYPE_CONTACT);
   self_handle = tp_handle_ensure(repo, ring_self_handle_name, NULL, NULL);
   tp_base_connection_set_self_handle(base, self_handle);
-  tp_handle_unref(repo, self_handle);
   g_assert(base->self_handle != 0);
 
   self->anon_handle = tp_handle_ensure(repo, "", NULL, NULL);
@@ -244,15 +243,10 @@ static void
 ring_connection_dispose(GObject *object)
 {
   RingConnection *self = RING_CONNECTION(object);
-  TpHandleRepoIface *repo = tp_base_connection_get_handles(
-    TP_BASE_CONNECTION(self), TP_HANDLE_TYPE_CONTACT);
 
   if (self->priv->dispose_has_run)
     return;
   self->priv->dispose_has_run = 1;
-
-  tp_handle_unref(repo, self->anon_handle), self->anon_handle = 0;
-  tp_handle_unref(repo, self->sos_handle), self->sos_handle = 0;
 
   if (self->priv->modem)
     g_object_unref (self->priv->modem);

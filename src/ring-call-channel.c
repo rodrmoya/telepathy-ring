@@ -436,18 +436,12 @@ ring_call_channel_dispose(GObject *object)
 {
   RingCallChannel *self = RING_CALL_CHANNEL(object);
   RingCallChannelPrivate *priv = self->priv;
-  TpBaseChannel *base = TP_BASE_CHANNEL (object);
 
   if (self->priv->disposed)
     return;
   self->priv->disposed = TRUE;
 
-  if (priv->member.handle) {
-    TpHandleRepoIface *repo = tp_base_connection_get_handles(
-      tp_base_channel_get_connection (base), TP_HANDLE_TYPE_CONTACT);
-    tp_handle_unref(repo, priv->member.handle);
-    priv->member.handle = 0;
-  }
+  priv->member.handle = 0;
 
   ((GObjectClass *)ring_call_channel_parent_class)->dispose(object);
 }

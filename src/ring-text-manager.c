@@ -804,9 +804,6 @@ get_text_channel(RingTextManager *self,
 
   channel = ring_text_manager_request(self, NULL, initiator, handle, 0, class0);
 
-  if (channel == NULL)
-    tp_handle_unref(repo, handle);
-
   return channel;
 }
 
