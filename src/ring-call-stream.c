@@ -25,8 +25,6 @@
 #define DEBUG_FLAG RING_DEBUG_MEDIA
 #include "ring-debug.h"
 
-static void implement_call_stream (gpointer klass, gpointer unused);
-
 G_DEFINE_TYPE(RingCallStream, ring_call_stream,
     TP_TYPE_BASE_MEDIA_CALL_STREAM);
 
