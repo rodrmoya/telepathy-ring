@@ -28,6 +28,11 @@
 G_DEFINE_TYPE(RingCallStream, ring_call_stream,
     TP_TYPE_BASE_MEDIA_CALL_STREAM);
 
+static void
+ring_call_stream_init (RingCallStream *self)
+{
+}
+
 static gboolean
 ring_call_stream_set_sending (
     TpBaseMediaCallStream *self,
