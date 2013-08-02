@@ -784,7 +784,7 @@ ring_normalize_contact (char const *input,
   char *s;
   int i, j;
 
-  if (g_strcasecmp(input, ring_self_handle_name) == 0)
+  if (g_ascii_strcasecmp(input, ring_self_handle_name) == 0)
     return g_strdup(ring_self_handle_name);
 
   if (strlen(input) == strspn(input, "()-. "))

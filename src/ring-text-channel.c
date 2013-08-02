@@ -593,7 +593,7 @@ ring_text_channel_send(GObject *_self,
 
   text = my_message_mixin_get_string(msg, 1, "content", "");
 
-  if (g_strcasecmp(type, text_plain) == 0) {
+  if (g_ascii_strcasecmp(type, text_plain) == 0) {
     DEBUG("Send(destination = %s," /*class = %u,*/ "text = \"%s\")",
       priv->destination, /*sms_class,*/ text);
   }
