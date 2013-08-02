@@ -65,7 +65,7 @@ dnl GTK_DOC_CHECK
 
 AC_DEFINE([_GNU_SOURCE], [1], [Enable GNU extensions])
 
-PKG_CHECK_MODULES([GLIB], [gobject-2.0 >= 2.4 glib-2.0])
+PKG_CHECK_MODULES([GLIB], [gobject-2.0 >= 2.4 glib-2.0 gio-2.0])
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
 AC_SUBST(GLIB_GENMARSHAL)
