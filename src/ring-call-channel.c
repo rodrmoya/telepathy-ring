@@ -121,6 +121,14 @@ struct _RingCallChannelPrivate
     gulong waiting, on_hold, forwarded;
     gulong notify_multiparty;
   } signals;
+
+  struct {
+    uint8_t state;
+    uint8_t reason;
+    uint8_t requested;          /* Hold state requested by client */
+  } hold;
+
+  ModemRequest *control;
 };
 
 /* properties */
@@ -153,6 +161,7 @@ enum
 static TpDBusPropertiesMixinIfaceImpl
 ring_call_channel_dbus_property_interfaces[];
 static void ring_channel_call_state_iface_init(gpointer, gpointer);
+static void ring_channel_hold_iface_init(gpointer, gpointer);
 static void ring_channel_splittable_iface_init(gpointer, gpointer);
 
 static gboolean ring_call_channel_add_member(
@@ -177,14 +186,16 @@ G_DEFINE_TYPE_WITH_CODE(
     ring_channel_call_state_iface_init);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_SERVICE_POINT,
     NULL);
+  G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_HOLD,
+    ring_channel_hold_iface_init);
   G_IMPLEMENT_INTERFACE(RING_TYPE_SVC_CHANNEL_INTERFACE_SPLITTABLE,
     ring_channel_splittable_iface_init));
 
 const char *ring_call_channel_interfaces[] = {
-  RING_MEDIA_CHANNEL_INTERFACES,
   TP_IFACE_CHANNEL_INTERFACE_GROUP,
   TP_IFACE_CHANNEL_INTERFACE_CALL_STATE,
   TP_IFACE_CHANNEL_INTERFACE_SERVICE_POINT,
+  TP_IFACE_CHANNEL_INTERFACE_HOLD,
   RING_IFACE_CHANNEL_INTERFACE_SPLITTABLE,
   NULL
 };
@@ -198,7 +209,7 @@ static void ring_call_channel_play_error_tone(RingCallChannel *self,
   guint state, guint causetype, guint cause);
 static gboolean ring_call_channel_close(RingMediaChannel *_self,
   gboolean immediately);
-static void ring_call_channel_set_call_instance(RingMediaChannel *_self,
+static void ring_call_channel_set_call_instance(RingCallChannel *_self,
   ModemCall *ci);
 static gboolean ring_call_channel_validate_media_handle (gpointer _self,
   guint *handle,
@@ -786,7 +797,7 @@ ring_call_channel_play_error_tone(RingCallChannel *self,
 }
 
 static void
-ring_call_channel_set_call_instance(RingMediaChannel *_self,
+ring_call_channel_set_call_instance(RingCallChannel *_self,
   ModemCall *ci)
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
@@ -1102,6 +1113,215 @@ ring_channel_call_state_iface_init(gpointer g_iface, gpointer iface_data)
     klass, x)
   IMPLEMENT(get_call_states);
 #undef IMPLEMENT
+}
+
+/* ---------------------------------------------------------------------- */
+/* Implement org.freedesktop.Telepathy.Channel.Interface.Hold */
+
+static int ring_update_hold (RingCallChannel *self, int hold, int reason);
+
+static
+void get_hold_state(TpSvcChannelInterfaceHold *iface,
+  DBusGMethodInvocation *context)
+{
+  RingCallChannel *self = RING_CALL_CHANNEL(iface);
+  RingCallChannelPrivate *priv = self->priv;
+
+  if (self->call_instance == NULL)
+    {
+      GError *error = NULL;
+      g_set_error(&error, TP_ERROR, TP_ERROR_DISCONNECTED,
+          "Channel is not connected");
+      dbus_g_method_return_error(context, error);
+      g_error_free(error);
+    }
+  else
+    {
+      tp_svc_channel_interface_hold_return_from_get_hold_state (context,
+          priv->hold.state, priv->hold.reason);
+    }
+}
+
+static ModemCallReply response_to_hold;
+
+static
+void request_hold (TpSvcChannelInterfaceHold *iface,
+                   gboolean hold,
+                   DBusGMethodInvocation *context)
+{
+  RingCallChannel *self = RING_CALL_CHANNEL (iface);
+  RingCallChannelPrivate *priv = self->priv;
+  ModemCall *instance = self->call_instance;
+
+  GError *error = NULL;
+  uint8_t state, next;
+  ModemCallState expect;
+
+  DEBUG ("(%u) on %s", hold, self->nick);
+
+  if (hold)
+    {
+      expect = MODEM_CALL_STATE_ACTIVE;
+      state = TP_LOCAL_HOLD_STATE_HELD;
+      next = TP_LOCAL_HOLD_STATE_PENDING_HOLD;
+    }
+  else
+    {
+      expect = MODEM_CALL_STATE_HELD;
+      state = TP_LOCAL_HOLD_STATE_UNHELD;
+      next = TP_LOCAL_HOLD_STATE_PENDING_UNHOLD;
+    }
+
+  if (instance == NULL)
+    {
+      g_set_error(&error, TP_ERROR, TP_ERROR_DISCONNECTED,
+          "Channel is not connected");
+    }
+  else if (state == priv->hold.state || next == priv->hold.state)
+    {
+      priv->hold.reason = TP_LOCAL_HOLD_STATE_REASON_REQUESTED;
+      tp_svc_channel_interface_hold_return_from_request_hold(context);
+      return;
+    }
+  else if (priv->state != expect)
+    {
+      g_set_error (&error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
+          "Invalid call state %s",
+          modem_call_get_state_name(priv->state));
+    }
+  else if (priv->control)
+    {
+      g_set_error (&error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
+          "Call control operation pending");
+    }
+  else
+    {
+      tp_svc_channel_interface_hold_return_from_request_hold(context);
+
+      g_object_ref (self);
+
+      priv->control = modem_call_request_hold (instance, hold,
+          response_to_hold, self);
+      ring_media_channel_queue_request (self, priv->control);
+
+      priv->hold.requested = state;
+
+      ring_update_hold (self, next, TP_LOCAL_HOLD_STATE_REASON_REQUESTED);
+      return;
+    }
+
+  DEBUG ("request_hold(%u) on %s: %s", hold, self->nick, error->message);
+  dbus_g_method_return_error (context, error);
+  g_clear_error (&error);
+}
+
+static void
+response_to_hold (ModemCall *ci,
+                  ModemRequest *request,
+                  GError *error,
+                  gpointer _self)
+{
+  RingCallChannel *self = RING_CALL_CHANNEL (_self);
+  RingCallChannelPrivate *priv = self->priv;
+
+  if (priv->control == request)
+    priv->control = NULL;
+
+  ring_media_channel_dequeue_request (self, request);
+
+  if (error && priv->hold.requested != -1)
+    {
+      uint8_t next;
+
+      DEBUG ("%s: %s", self->nick, error->message);
+
+      if (priv->hold.requested)
+        next = TP_LOCAL_HOLD_STATE_UNHELD;
+      else
+        next = TP_LOCAL_HOLD_STATE_HELD;
+
+      ring_update_hold (self, next,
+          TP_LOCAL_HOLD_STATE_REASON_RESOURCE_NOT_AVAILABLE);
+
+      priv->hold.requested = -1;
+    }
+
+  ring_update_hold(self, priv->hold.requested, 0);
+  g_object_unref (self);
+}
+
+static void ring_channel_hold_iface_init(gpointer g_iface, gpointer iface_data)
+{
+  TpSvcChannelInterfaceHoldClass *klass = g_iface;
+
+#define IMPLEMENT(x) tp_svc_channel_interface_hold_implement_##x(       \
+    klass, x)
+  IMPLEMENT(get_hold_state);
+  IMPLEMENT(request_hold);
+#undef IMPLEMENT
+}
+
+static int
+ring_update_hold (RingCallChannel *self,
+                  int hold,
+                  int reason)
+{
+  RingCallChannelPrivate *priv = self->priv;
+  unsigned old = priv->hold.state;
+  char const *name;
+
+  if (hold == old)
+    return 0;
+
+  switch (hold) {
+    case TP_LOCAL_HOLD_STATE_UNHELD:
+      name = "Unheld";
+      if (reason)
+        ;
+      else if (hold == priv->hold.requested)
+        reason = TP_LOCAL_HOLD_STATE_REASON_REQUESTED;
+      else if (old == TP_LOCAL_HOLD_STATE_PENDING_HOLD)
+        reason = TP_LOCAL_HOLD_STATE_REASON_RESOURCE_NOT_AVAILABLE;
+      else
+        reason = TP_LOCAL_HOLD_STATE_REASON_NONE;
+      priv->hold.requested = -1;
+      break;
+    case TP_LOCAL_HOLD_STATE_HELD:
+      name = "Held";
+      if (reason)
+        ;
+      else if (hold == priv->hold.requested)
+        reason = TP_LOCAL_HOLD_STATE_REASON_REQUESTED;
+      else if (old == TP_LOCAL_HOLD_STATE_PENDING_UNHOLD)
+        reason = TP_LOCAL_HOLD_STATE_REASON_RESOURCE_NOT_AVAILABLE;
+      else
+        reason = TP_LOCAL_HOLD_STATE_REASON_NONE;
+      priv->hold.requested = -1;
+      break;
+    case TP_LOCAL_HOLD_STATE_PENDING_HOLD:
+      name = "Pending_Hold";
+      break;
+    case TP_LOCAL_HOLD_STATE_PENDING_UNHOLD:
+      name = "Pending_Unhold";
+      break;
+    default:
+      name = "Unknown";
+      DEBUG("unknown %s(%d)", "HoldStateChanged", hold);
+      return -1;
+  }
+
+  g_object_set(self,
+    "hold-state", hold,
+    "hold-state-reason", reason,
+    NULL);
+
+  DEBUG("emitting %s(%s) for %s", "HoldStateChanged", name, self->nick);
+
+  tp_svc_channel_interface_hold_emit_hold_state_changed(
+    (TpSvcChannelInterfaceHold *)self,
+    hold, reason);
+
+  return 0;
 }
 
 static void ring_update_call_state(RingCallChannel *self,
