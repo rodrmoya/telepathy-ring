@@ -509,13 +509,6 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
   return NULL; /* FIXME */
 }
 
-static void
-ring_call_channel_hangup (TpBaseCallChannel *self,
-  TpCallStateChangeReason reason,
-  const gchar *detailed_reason,
-  const gchar *message)
-{
-}
 
 /* ====================================================================== */
 /* GObjectClass */
@@ -542,7 +535,6 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
 
   base_call_class->accept = ring_call_channel_accept;
   base_call_class->add_content = ring_call_channel_add_content;
-  base_call_class->hangup = ring_call_channel_hangup;
 
   klass->dbus_properties_class.interfaces =
     ring_call_channel_dbus_property_interfaces;
