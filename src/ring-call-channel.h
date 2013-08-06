@@ -44,7 +44,6 @@ G_BEGIN_DECLS
 struct _RingCallChannelClass {
   RingBaseCallChannelClass base_class;
   TpGroupMixinClass group_class;
-  TpDBusPropertiesMixinClass dbus_properties_class;
 };
 
 struct _RingCallChannel {
