@@ -207,8 +207,7 @@ static void ring_call_channel_update_state(RingMediaChannel *_self,
   guint state, guint causetype, guint cause);
 static void ring_call_channel_play_error_tone(RingCallChannel *self,
   guint state, guint causetype, guint cause);
-static gboolean ring_call_channel_close(RingMediaChannel *_self,
-  gboolean immediately);
+static void ring_call_channel_close(TpBaseChannel *self);
 static void ring_call_channel_set_call_instance(RingCallChannel *_self,
   ModemCall *ci);
 static gboolean ring_call_channel_validate_media_handle (gpointer _self,
@@ -485,6 +484,44 @@ ring_call_channel_finalize(GObject *object)
   DEBUG("exit");
 }
 
+static GPtrArray *
+ring_call_channel_get_interfaces (TpBaseChannel *self)
+{
+  GPtrArray *interfaces;
+  gint i;
+
+  interfaces = TP_BASE_CHANNEL_CLASS (ring_call_channel_parent_class)->get_interfaces (self);
+
+  for (i = 0; i < G_N_ELEMENTS (ring_call_channel_interfaces); i++) {
+    g_ptr_array_add (interfaces, (gpointer) ring_call_channel_interfaces[i]);
+  }
+
+  return interfaces;
+}
+
+static void
+ring_call_channel_accept (TpBaseCallChannel *self)
+{
+}
+
+static TpBaseCallContent *
+ring_call_channel_add_content (TpBaseCallChannel *self,
+  const gchar *name,
+  TpMediaStreamType media,
+  TpMediaStreamDirection initial_direction,
+  GError **error)
+{
+  return NULL; /* FIXME */
+}
+
+static void
+ring_call_channel_hangup (TpBaseCallChannel *self,
+  TpCallStateChangeReason reason,
+  const gchar *detailed_reason,
+  const gchar *message)
+{
+}
+
 /* ====================================================================== */
 /* GObjectClass */
 
@@ -493,6 +530,7 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS(klass);
   TpBaseChannelClass *base_chan_class = TP_BASE_CHANNEL_CLASS (klass);
+  TpBaseCallChannelClass *base_call_class = TP_BASE_CALL_CHANNEL_CLASS (klass);
 
   g_type_class_add_private(klass, sizeof (RingCallChannelPrivate));
 
@@ -502,9 +540,14 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
   object_class->dispose = ring_call_channel_dispose;
   object_class->finalize = ring_call_channel_finalize;
 
-  base_chan_class->interfaces = ring_call_channel_interfaces;
   base_chan_class->target_handle_type = TP_HANDLE_TYPE_CONTACT;
+  base_chan_class->get_interfaces = ring_call_channel_get_interfaces;
+  base_chan_class->close = ring_call_channel_close;
   base_chan_class->fill_immutable_properties = ring_call_channel_fill_immutable_properties;
+
+  base_call_class->accept = ring_call_channel_accept;
+  base_call_class->add_content = ring_call_channel_add_content;
+  base_call_class->hangup = ring_call_channel_hangup;
 
   klass->dbus_properties_class.interfaces =
     ring_call_channel_dbus_property_interfaces;
@@ -670,8 +713,8 @@ ring_call_channel_fill_immutable_properties(TpBaseChannel *base,
 static ModemRequest *ring_call_channel_create(RingCallChannel *, GError **error);
 
 /** Close channel */
-static gboolean
-ring_call_channel_close(RingMediaChannel *_self, gboolean immediately)
+static void
+ring_call_channel_close(TpBaseChannel *_self)
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = RING_CALL_CHANNEL(self)->priv;
@@ -695,17 +738,12 @@ ring_call_channel_close(RingMediaChannel *_self, gboolean immediately)
     if (!priv->release.message)
       priv->release.message = g_strdup("Channel closed");
     modem_call_request_release(self->call_instance, NULL, NULL);
-    return immediately;
+    return;
   }
   else if (priv->creating_call) {
-    if (immediately) {
-      modem_request_cancel(priv->creating_call);
-      priv->creating_call = NULL;
-      g_object_unref(self);
-    }
-    else if (!priv->release.message)
-      priv->release.message = g_strdup("Channel closed");
-    return immediately;
+    modem_request_cancel(priv->creating_call);
+    priv->creating_call = NULL;
+    g_object_unref(self);
   }
 
   return TRUE;
