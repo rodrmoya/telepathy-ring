@@ -219,6 +219,7 @@ static gboolean ring_call_channel_create_streams (gpointer _self,
   gboolean video,
   GError **);
 
+static ModemCallService *ring_call_channel_get_call_service (RingCallChannel *self);
 static guint ring_call_channel_get_member_handle(RingCallChannel *self);
 
 static void on_modem_call_state_dialing(RingCallChannel *self);
@@ -941,7 +942,7 @@ ring_call_channel_create_streams (gpointer _self,
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = self->priv;
-  ModemCallService *call_service = ring_media_channel_get_call_service (_self);
+  ModemCallService *call_service = ring_call_channel_get_call_service (_self);
 
   (void)audio; (void)video;
 
@@ -1031,7 +1032,7 @@ ring_call_channel_create(RingCallChannel *self, GError **error)
   if (priv->dial2nd)
     DEBUG("2nd stage dialing: \"%s\"", priv->dial2nd);
 
-  service = ring_media_channel_get_call_service (RING_MEDIA_CHANNEL (self));
+  service = ring_call_channel_get_call_service (RING_CALL_CHANNEL (self));
 
   request = modem_call_request_dial (service, number, clir,
             reply_to_modem_call_request_dial, self);
@@ -2034,6 +2035,25 @@ ring_member_channel_can_become_member(RingMemberChannel const *iface,
   }
 
   return TRUE;
+}
+
+static ModemCallService *
+ring_call_channel_get_call_service (RingCallChannel *self)
+{
+  TpBaseChannel *base = TP_BASE_CHANNEL (self);
+  TpBaseConnection *base_connection;
+  RingConnection *connection;
+  ModemOface *oface;
+
+  base_connection = tp_base_channel_get_connection (base);
+  connection = RING_CONNECTION (base_connection);
+  oface = ring_connection_get_modem_interface (connection,
+      MODEM_OFACE_CALL_MANAGER);
+
+  if (oface)
+    return MODEM_CALL_SERVICE (oface);
+  else
+    return NULL;
 }
 
 static guint
