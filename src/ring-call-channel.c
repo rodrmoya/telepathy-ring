@@ -129,6 +129,8 @@ struct _RingCallChannelPrivate
   } hold;
 
   ModemRequest *control;
+  guint playing;
+  ModemTones *tones;
 };
 
 /* properties */
@@ -154,6 +156,8 @@ enum
 
   PROP_PEER,
   PROP_INITIAL_REMOTE,
+
+  PROP_TONES,
 
   LAST_PROPERTY
 };
@@ -434,6 +438,10 @@ ring_call_channel_set_property(GObject *obj,
     case PROP_INITIAL_REMOTE:
       priv->initial_remote = g_value_get_uint(value);
       break;
+    case PROP_TONES:
+      /* media manager owns tones as well as a reference to this channel */
+      priv->tones = g_value_get_object(value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, property_id, pspec);
       break;
@@ -457,6 +465,9 @@ ring_call_channel_dispose(GObject *object)
     tp_handle_unref(repo, priv->member.handle);
     priv->member.handle = 0;
   }
+
+  if (priv->playing)
+    modem_tones_stop(priv->tones, priv->playing);
 
   /* If still holding on to a call instance, disconnect */
   if (self->call_instance)
@@ -711,6 +722,16 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
       0, G_MAXUINT32, 0,    /* min, max, default */
       G_PARAM_READWRITE |
       G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property(
+    object_class, PROP_TONES,
+    g_param_spec_object("tones",
+      "ModemTones Object",
+      "ModemTones for this channel",
+      MODEM_TYPE_TONES,
+      G_PARAM_WRITABLE |
+      G_PARAM_CONSTRUCT_ONLY |
+      G_PARAM_STATIC_STRINGS));
 }
 
 /* ====================================================================== */
@@ -769,6 +790,9 @@ ring_call_channel_close(TpBaseChannel *_self)
   RingCallChannelPrivate *priv = RING_CALL_CHANNEL(self)->priv;
 
   priv->closing = 1;
+
+  if (priv->playing)
+    modem_tones_stop(priv->tones, priv->playing);
 
   if (priv->member.conference) {
     TpHandle actor = priv->release.actor;
