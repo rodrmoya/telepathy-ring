@@ -1254,7 +1254,7 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
     g_error_free(error0);
   g_free(debug);
 
-  if (!ring_media_channel_is_playing(RING_MEDIA_CHANNEL(self)))
+  if (!priv->playing)
     ring_media_channel_close(RING_MEDIA_CHANNEL(self));
 }
 
