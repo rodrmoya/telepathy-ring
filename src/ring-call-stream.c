@@ -25,8 +25,6 @@
 #define DEBUG_FLAG RING_DEBUG_MEDIA
 #include "ring-debug.h"
 
-static void implement_call_stream (gpointer klass, gpointer unused);
-
 G_DEFINE_TYPE(RingCallStream, ring_call_stream,
     TP_TYPE_BASE_MEDIA_CALL_STREAM);
 
@@ -35,9 +33,25 @@ ring_call_stream_init (RingCallStream *self)
 {
 }
 
+static gboolean
+ring_call_stream_set_sending (
+    TpBaseMediaCallStream *self,
+    gboolean receive,
+    GError **error)
+{
+  g_set_error (error, TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
+      "RequestReceiving is not supported for cellular calls.");
+
+  return FALSE;
+}
+
 static void
 ring_call_stream_class_init (RingCallStreamClass *klass)
 {
+  TpBaseMediaCallStreamClass *stream_class = TP_BASE_MEDIA_CALL_STREAM_CLASS (klass);
+
+  /*stream_class->add_candidates = ring_call_stream_add_candidates; */
+  stream_class->set_sending = ring_call_stream_set_sending;
 }
 
 RingCallStream *
@@ -48,42 +62,4 @@ ring_call_stream_new (RingConnection *connection,
       "connection", connection,
       "object-path", object_path,
       NULL);
-}
-
-static void
-ring_call_stream_set_sending (
-    RingCallStream *self,
-    gboolean send,
-    DBusGMethodInvocation *context)
-{
-  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
-      "SetSending is not supported for cellular calls." };
-
- /* Maybe we should put the call on hold/resume? */
-
-  dbus_g_method_return_error (context, &error);
-}
-
-static void
-ring_call_stream_request_receiving (
-    RingCallStream *self,
-    TpHandle contact,
-    gboolean receive,
-    DBusGMethodInvocation *context)
-{
-  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
-      "RequestReceiving is not supported for cellular calls." };
-
-  dbus_g_method_return_error (context, &error);
-}
-
-static void
-implement_call_stream (gpointer klass,
-    gpointer unused G_GNUC_UNUSED)
-{
-#define IMPLEMENT(x) ring_svc_call_stream_implement_##x (\
-  klass, ring_call_stream_##x)
-  IMPLEMENT (set_sending);
-  IMPLEMENT (request_receiving);
-#undef IMPLEMENT
 }

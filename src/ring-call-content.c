@@ -33,9 +33,6 @@ struct _RingCallContentPrivate {
     RingCallStream *stream;
 };
 
-static void implement_call_content (gpointer klass,
-    gpointer unused G_GNUC_UNUSED);
-
 G_DEFINE_TYPE (RingCallContent, ring_call_content,
     TP_TYPE_BASE_MEDIA_CALL_CONTENT);
 
@@ -112,28 +109,3 @@ ring_call_content_get_stream (RingCallContent *self)
   return self->priv->stream;
 }
 
-static void
-ring_call_content_remove (
-    RingCallContent *self,
-    DBusGMethodInvocation *context)
-{
-  /* We could just leave all this out — the base class leaves Remove()
-   * unimplemented, so TP_ERROR_NOT_IMPLEMENTED would be returned just like
-   * this. But I think having a less generic error message is worth thirty(!)
-   * lines of boilerplate.
-   */
-  GError error = { TP_ERROR, TP_ERROR_NOT_IMPLEMENTED,
-      "Removing contents is not supported for cellular calls." };
-
-  dbus_g_method_return_error (context, &error);
-}
-
-static void
-implement_call_content (gpointer klass,
-    gpointer unused G_GNUC_UNUSED)
-{
-#define IMPLEMENT(x) ring_svc_call_content_implement_##x (\
-  klass, ring_call_content_##x)
-  IMPLEMENT (remove);
-#undef IMPLEMENT
-}

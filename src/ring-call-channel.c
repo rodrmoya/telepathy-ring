@@ -131,6 +131,8 @@ struct _RingCallChannelPrivate
   ModemRequest *control;
   guint playing;
   ModemTones *tones;
+
+  GQueue *requests;
 };
 
 /* properties */
@@ -453,18 +455,16 @@ ring_call_channel_dispose(GObject *object)
 {
   RingCallChannel *self = RING_CALL_CHANNEL(object);
   RingCallChannelPrivate *priv = self->priv;
-  TpBaseChannel *base = TP_BASE_CHANNEL (object);
 
   if (self->priv->disposed)
     return;
   self->priv->disposed = TRUE;
 
-  if (priv->member.handle) {
-    TpHandleRepoIface *repo = tp_base_connection_get_handles(
-      tp_base_channel_get_connection (base), TP_HANDLE_TYPE_CONTACT);
-    tp_handle_unref(repo, priv->member.handle);
-    priv->member.handle = 0;
-  }
+  priv->member.handle = 0;
+
+  /* If still holding on to a call instance, disconnect */
+  if (self->call_instance)
+    ring_call_channel_set_call_instance (self, NULL);
 
   if (priv->playing)
     modem_tones_stop(priv->tones, priv->playing);
@@ -782,6 +782,24 @@ ring_call_channel_fill_immutable_properties(TpBaseChannel *base,
 
 static ModemRequest *ring_call_channel_create(RingCallChannel *, GError **error);
 
+ModemRequest *
+ring_call_channel_queue_request (RingCallChannel *self,
+  ModemRequest *request)
+{
+  if (request)
+    g_queue_push_tail(self->priv->requests, request);
+  return request;
+}
+
+ModemRequest *
+ring_call_channel_dequeue_request(RingCallChannel *self,
+  ModemRequest *request)
+{
+  if (request)
+    g_queue_remove(self->priv->requests, request);
+  return request;
+}
+
 /** Close channel */
 static void
 ring_call_channel_close(TpBaseChannel *_self)
@@ -807,11 +825,13 @@ ring_call_channel_close(TpBaseChannel *_self)
     g_assert(priv->member.conference == NULL);
   }
 
+  while (!g_queue_is_empty(priv->requests))
+    modem_request_cancel(g_queue_pop_head(priv->requests));
+
   if (self->call_instance) {
     if (!priv->release.message)
       priv->release.message = g_strdup("Channel closed");
     modem_call_request_release(self->call_instance, NULL, NULL);
-    return;
   }
   else if (priv->creating_call) {
     modem_request_cancel(priv->creating_call);
@@ -819,7 +839,7 @@ ring_call_channel_close(TpBaseChannel *_self)
     g_object_unref(self);
   }
 
-  return TRUE;
+  tp_base_channel_destroyed (_self);
 }
 
 static void
@@ -1319,7 +1339,7 @@ void request_hold (TpSvcChannelInterfaceHold *iface,
 
       priv->control = modem_call_request_hold (instance, hold,
           response_to_hold, self);
-      ring_media_channel_queue_request (self, priv->control);
+      ring_call_channel_queue_request (self, priv->control);
 
       priv->hold.requested = state;
 
@@ -1344,7 +1364,7 @@ response_to_hold (ModemCall *ci,
   if (priv->control == request)
     priv->control = NULL;
 
-  ring_media_channel_dequeue_request (self, request);
+  ring_call_channel_dequeue_request (self, request);
 
   if (error && priv->hold.requested != -1)
     {

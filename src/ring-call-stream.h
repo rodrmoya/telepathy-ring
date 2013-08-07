@@ -66,8 +66,6 @@ RingCallStream *ring_call_stream_new (RingConnection *connection,
   (G_TYPE_INSTANCE_GET_CLASS ((obj), RING_TYPE_CALL_STREAM, \
                               RingCallStreamClass))
 
-void ring_call_stream_update_member_states(RingCallStream *self);
-
 G_END_DECLS
 
 #endif /* RING_CALL_STREAM_H */

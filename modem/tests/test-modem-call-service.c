@@ -91,8 +91,6 @@ tcase_for_modem_call_address_validator(void)
 {
   TCase *tc = tcase_create("Test for modem call address validation");
 
-  tcase_add_checked_fixture(tc, g_type_init, NULL);
-
   tcase_add_test(tc, test_modem_call_validate_address);
 
   tcase_set_timeout(tc, 5);

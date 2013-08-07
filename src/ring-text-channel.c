@@ -593,7 +593,7 @@ ring_text_channel_send(GObject *_self,
 
   text = my_message_mixin_get_string(msg, 1, "content", "");
 
-  if (g_strcasecmp(type, text_plain) == 0) {
+  if (g_ascii_strcasecmp(type, text_plain) == 0) {
     DEBUG("Send(destination = %s," /*class = %u,*/ "text = \"%s\")",
       priv->destination, /*sms_class,*/ text);
   }
@@ -828,10 +828,9 @@ ring_text_channel_receive_text (RingTextChannel *self,
 
   DEBUG("enter");
 
-  msg = tp_message_new (connection, 2, 2);
+  msg = tp_cm_message_new (connection, 2);
 
-  tp_message_set_handle (msg, 0, "message-sender",
-      TP_HANDLE_TYPE_CONTACT, tp_base_channel_get_target_handle (base));
+  tp_cm_message_set_sender (msg, tp_base_channel_get_target_handle (base));
   tp_message_set_string (msg, 0, "message-token", message_token);
   tp_message_set_uint32 (msg, 0, "message-type",
       TP_CHANNEL_TEXT_MESSAGE_TYPE_NORMAL);
@@ -865,10 +864,9 @@ ring_text_channel_delivery_report(RingTextChannel *self,
   TpMessage *msg;
   guint id;
 
-  msg = tp_message_new (connection, 1, 1);
+  msg = tp_cm_message_new (connection, 1);
 
-  tp_message_set_handle (msg, 0, "message-sender",
-      TP_HANDLE_TYPE_CONTACT, tp_base_channel_get_target_handle (base));
+  tp_cm_message_set_sender (msg, tp_base_channel_get_target_handle (base));
   tp_message_set_uint32 (msg, 0, "message-type",
       TP_CHANNEL_TEXT_MESSAGE_TYPE_DELIVERY_REPORT);
 

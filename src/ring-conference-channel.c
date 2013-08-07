@@ -604,7 +604,7 @@ update_media_stream(RingConferenceChannel *self,
       /* emit StreamRemoved */
       tp_svc_channel_type_streamed_media_emit_stream_removed(
         (TpSvcChannelTypeStreamedMedia *)self, id);
-      memset(ss, 0, sizeof ss);
+      memset(ss, 0, sizeof *ss);
     }
     return changed;
   }
@@ -1698,7 +1698,7 @@ ring_conference_channel_release(RingConferenceChannel *self,
   GError *error = NULL;
   char *debug = NULL;
   char *dbus_error = NULL;
-  int i, details;
+  int i;
 
   if (error0) {
     reason = TP_CHANNEL_GROUP_CHANGE_REASON_ERROR;
@@ -1710,10 +1710,6 @@ ring_conference_channel_release(RingConferenceChannel *self,
   }
   message = error->message;
   dbus_error = modem_error_fqn(error);
-
-  details = causetype && cause &&
-    reason != TP_CHANNEL_GROUP_CHANGE_REASON_BUSY &&
-    reason != TP_CHANNEL_GROUP_CHANGE_REASON_NONE;
 
   DEBUG("TERMINATED: message=\"%s\" reason=%s (%u) cause=%s.%s (%u.%u)",
     message, ring_util_reason_name(reason), reason,

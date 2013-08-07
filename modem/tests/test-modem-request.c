@@ -41,8 +41,6 @@ static void setup(void)
   if (getenv("SBOX_UNAME_MACHINE"))
     setenv("DBUS_LOOPBACK", "1", 0);
 
-  g_type_init();
-
   mainloop = g_main_loop_new (NULL, FALSE);
   (void)dbus_g_bus_get(DBUS_BUS_SYSTEM, NULL);
 }
@@ -489,8 +487,6 @@ static TCase *
 assumptions_tcase(void)
 {
   TCase *tc = tcase_create("Test Glib assumptions");
-
-  tcase_add_checked_fixture(tc, g_type_init, NULL);
 
   tcase_add_test(tc, g_object_assumptions);
   tcase_add_test(tc, proxy_assumptions);

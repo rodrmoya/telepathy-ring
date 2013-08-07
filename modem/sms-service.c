@@ -562,9 +562,8 @@ gint64
 modem_sms_parse_time (gchar const *s)
 {
   struct tm tm = { };
-  char *rest;
 
-  rest = strptime (s, "%Y-%m-%dT%H:%M:%S%z", &tm);
+  strptime (s, "%Y-%m-%dT%H:%M:%S%z", &tm);
 
   return (gint64) mktime (&tm);
 }
@@ -837,14 +836,9 @@ reply_to_send_message (DBusGProxy *proxy,
 
   GError *error = NULL;
 
-  if (dbus_g_proxy_end_call (proxy, call, &error,
-          DBUS_TYPE_G_OBJECT_PATH, &message_path,
-          G_TYPE_INVALID))
-    {
-      char const *destination;
-
-      destination = modem_request_get_data (request, "destination");
-    }
+  dbus_g_proxy_end_call (proxy, call, &error,
+      DBUS_TYPE_G_OBJECT_PATH, &message_path,
+      G_TYPE_INVALID);
 
   callback (self, request, message_path, error, user_data);
 

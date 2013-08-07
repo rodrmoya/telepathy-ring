@@ -652,6 +652,69 @@ channel_manager_iface_init(gpointer ifacep,
 }
 
 /* ---------------------------------------------------------------------- */
+/* Insert channel-type specific capabilities into array */
+
+void
+ring_media_manager_add_capabilities(RingMediaManager *self,
+  guint handle,
+  GPtrArray *returns)
+{
+  RingMediaManagerPrivate *priv = RING_MEDIA_MANAGER(self)->priv;
+  char const *id = ring_connection_inspect_contact(priv->connection, handle);
+  guint selfhandle = tp_base_connection_get_self_handle(
+    (TpBaseConnection *)priv->connection);
+
+  if (id == NULL)
+    return;
+
+  if (!ring_media_manager_is_connected (self))
+    return;
+
+  /* XXX - should check if we are in emergency call mode only status */
+
+  if (handle == selfhandle) {
+    if (priv->capability_flags)
+      g_ptr_array_add(returns,
+        ring_contact_capability_new(handle,
+          TP_IFACE_CHANNEL_TYPE_CALL,
+          TP_CONNECTION_CAPABILITY_FLAG_CREATE |
+          TP_CONNECTION_CAPABILITY_FLAG_INVITE,
+          RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));
+  }
+  else if (modem_call_is_valid_address (id)) {
+    g_ptr_array_add(returns,
+      ring_contact_capability_new(handle,
+        TP_IFACE_CHANNEL_TYPE_CALL,
+        TP_CONNECTION_CAPABILITY_FLAG_CREATE |
+        TP_CONNECTION_CAPABILITY_FLAG_INVITE,
+        RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));
+  }
+}
+
+void
+ring_media_manager_add_contact_capabilities(RingMediaManager *self,
+  TpHandle Handle,
+  GPtrArray *array)
+{
+  GValue rcc = {0, };
+  GHashTable *fixed_properties;
+
+  g_value_init(&rcc, TP_STRUCT_TYPE_REQUESTABLE_CHANNEL_CLASS);
+  g_value_take_boxed(&rcc,
+      dbus_g_type_specialized_construct(
+          TP_STRUCT_TYPE_REQUESTABLE_CHANNEL_CLASS));
+
+  fixed_properties = ring_call_channel_fixed_properties();
+
+  dbus_g_type_struct_set(&rcc,
+      0, fixed_properties,
+      1, ring_call_channel_allowed_properties,
+      G_MAXUINT);
+
+  g_ptr_array_add(array, g_value_get_boxed(&rcc));
+}
+
+/* ---------------------------------------------------------------------- */
 
 static gboolean
 ring_media_requestotron(RingMediaManager *self,

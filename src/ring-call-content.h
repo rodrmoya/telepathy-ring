@@ -52,8 +52,6 @@ RingCallContent *ring_call_content_new (RingConnection *connection,
 
 RingCallStream *ring_call_content_get_stream (RingCallContent *self);
 
-static void ring_call_content_remove(RingCallContent *self, DBusGMethodInvocation *context);
-
 /* TYPE MACROS */
 #define RING_TYPE_CALL_CONTENT \
   (ring_call_content_get_type ())

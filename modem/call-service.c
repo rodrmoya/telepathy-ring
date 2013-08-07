@@ -963,7 +963,6 @@ on_modem_call_state (ModemCall *ci,
                      ModemCallService *self)
 {
   ModemCallServicePrivate *priv;
-  gboolean releasing = FALSE;
 
   RETURN_IF_NOT_VALID (self);
 
@@ -986,7 +985,6 @@ on_modem_call_state (ModemCall *ci,
       break;
 
     case MODEM_CALL_STATE_DISCONNECTED:
-      releasing = TRUE;
       /* FALLTHROUGH */
     case MODEM_CALL_STATE_INVALID:
       if (priv->active == ci)

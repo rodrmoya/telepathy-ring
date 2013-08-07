@@ -36,7 +36,6 @@ static GMainLoop *mainloop = NULL;
 
 static void setup(void)
 {
-  g_type_init();
   mainloop = g_main_loop_new (NULL, FALSE);
 }
 

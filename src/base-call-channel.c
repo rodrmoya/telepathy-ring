@@ -52,18 +52,9 @@ static void ring_base_call_channel_hangup (
 
 static void ring_base_call_channel_close (TpBaseChannel *base);
 
-/* properties */
-enum
-{
-  PROP_OBJECT_PATH_PREFIX = 1,
-  LAST_PROPERTY
-};
-
 /* private structure */
 struct _RingBaseCallChannelPrivate
 {
-  gchar *object_path_prefix;
-
   gboolean dispose_has_run;
 
   /* handle -> CallMember object hash */
@@ -83,57 +74,11 @@ ring_base_call_channel_init (RingBaseCallChannel *self)
 }
 
 static void ring_base_call_channel_dispose (GObject *object);
-static void ring_base_call_channel_finalize (GObject *object);
-
-static void
-ring_base_call_channel_get_property (GObject    *object,
-    guint       property_id,
-    GValue     *value,
-    GParamSpec *pspec)
-{
-  RingBaseCallChannel *self = RING_BASE_CALL_CHANNEL (object);
-  RingBaseCallChannelPrivate *priv = self->priv;
-
-  switch (property_id)
-    {
-      case PROP_OBJECT_PATH_PREFIX:
-        g_value_set_string (value, priv->object_path_prefix);
-        break;
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
-    }
-}
-
-static void
-ring_base_call_channel_set_property (GObject *object,
-    guint property_id,
-    const GValue *value,
-    GParamSpec *pspec)
-{
-  RingBaseCallChannel *self = RING_BASE_CALL_CHANNEL (object);
-  RingBaseCallChannelPrivate *priv = self->priv;
-
-  switch (property_id)
-    {
-      case PROP_OBJECT_PATH_PREFIX:
-        priv->object_path_prefix = g_value_dup_string (value);
-        break;
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
-  }
-}
 
 static gchar *
 ring_base_call_channel_get_object_path_suffix (TpBaseChannel *base)
 {
-  RingBaseCallChannel *self = RING_BASE_CALL_CHANNEL (base);
-  RingBaseCallChannelPrivate *priv = self->priv;
-
-  g_assert (priv->object_path_prefix != NULL);
-
-  return g_strdup_printf ("%s/CallChannel%p", priv->object_path_prefix, self);
+  return g_strdup_printf ("CallChannel%p", base);
 }
 
 static void
@@ -145,28 +90,17 @@ ring_base_call_channel_class_init (
       TP_BASE_CHANNEL_CLASS (ring_base_call_channel_class);
   TpBaseCallChannelClass *tp_base_call_channel_class =
       TP_BASE_CALL_CHANNEL_CLASS (ring_base_call_channel_class);
-  GParamSpec *param_spec;
 
   g_type_class_add_private (ring_base_call_channel_class,
       sizeof (RingBaseCallChannelPrivate));
 
-  object_class->get_property = ring_base_call_channel_get_property;
-  object_class->set_property = ring_base_call_channel_set_property;
   object_class->dispose = ring_base_call_channel_dispose;
-  object_class->finalize = ring_base_call_channel_finalize;
 
   base_channel_class->get_object_path_suffix =
       ring_base_call_channel_get_object_path_suffix;
   base_channel_class->close = ring_base_call_channel_close;
 
   tp_base_call_channel_class->hangup = ring_base_call_channel_hangup;
-
-  param_spec = g_param_spec_string ("object-path-prefix", "Object path prefix",
-      "prefix of the object path",
-      NULL,
-      G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
-  g_object_class_install_property (object_class, PROP_OBJECT_PATH_PREFIX,
-      param_spec);
 }
 
 void
@@ -184,17 +118,6 @@ ring_base_call_channel_dispose (GObject *object)
 
   if (G_OBJECT_CLASS (ring_base_call_channel_parent_class)->dispose)
     G_OBJECT_CLASS (ring_base_call_channel_parent_class)->dispose (object);
-}
-
-void
-ring_base_call_channel_finalize (GObject *object)
-{
-  RingBaseCallChannel *self = RING_BASE_CALL_CHANNEL (object);
-  RingBaseCallChannelPrivate *priv = self->priv;
-
-  g_free (priv->object_path_prefix);
-
-  G_OBJECT_CLASS (ring_base_call_channel_parent_class)->finalize (object);
 }
 
 RingCallContent *

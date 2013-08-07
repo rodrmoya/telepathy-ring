@@ -482,7 +482,7 @@ update_media_stream (TpSvcChannelTypeStreamedMedia *iface,
 
       /* emit StreamRemoved */
       tp_svc_channel_type_streamed_media_emit_stream_removed (iface, id);
-      memset (ss, 0, sizeof ss);
+      memset (ss, 0, sizeof *ss);
 
       return 1;
     }

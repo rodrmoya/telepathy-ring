@@ -122,6 +122,9 @@ enum {
 
 static void ring_connection_class_init_base_connection(TpBaseConnectionClass *);
 static void ring_connection_capabilities_iface_init(gpointer, gpointer);
+static void ring_connection_contact_capabilities_iface_init(gpointer, gpointer);
+static void ring_connection_add_capabilities(GObject *object,
+  GArray const *handles, GHashTable *returns);
 static void ring_connection_add_contact_capabilities(GObject *object,
   GArray const *handles, GHashTable *returns);
 /*static void ring_connection_stored_messages_iface_init(gpointer, gpointer);*/
@@ -154,6 +157,8 @@ G_DEFINE_TYPE_WITH_CODE (RingConnection,
     tp_contacts_mixin_iface_init);
   G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CAPABILITIES,
     ring_connection_capabilities_iface_init);
+  G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACT_CAPABILITIES,
+    ring_connection_contact_capabilities_iface_init);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CONNECTION_INTERFACE_SERVICE_POINT,
     NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CONNECTION_INTERFACE_CELLULAR,
@@ -171,6 +176,7 @@ static char const * const ring_connection_interfaces_always_present[] = {
   TP_IFACE_CONNECTION_INTERFACE_REQUESTS,
   TP_IFACE_CONNECTION_INTERFACE_CONTACTS,
   TP_IFACE_CONNECTION_INTERFACE_CAPABILITIES,
+  TP_IFACE_CONNECTION_INTERFACE_CONTACT_CAPABILITIES,
   TP_IFACE_CONNECTION_INTERFACE_SERVICE_POINT,
   TP_IFACE_CONNECTION_INTERFACE_CELLULAR,
   TP_IFACE_CONNECTION_INTERFACE_ANONYMITY,
@@ -198,6 +204,11 @@ ring_connection_init(RingConnection *self)
   /* org.freedesktop.Telepathy.Connection.Interface.Capabilities attributes */
   tp_contacts_mixin_add_contact_attributes_iface((GObject *)self,
     TP_IFACE_CONNECTION_INTERFACE_CAPABILITIES,
+    ring_connection_add_capabilities);
+
+  /* org.freedesktop.Telepathy.Connection.Interface.ContactCapabilities attributes */
+  tp_contacts_mixin_add_contact_attributes_iface((GObject *)self,
+    TP_IFACE_CONNECTION_INTERFACE_CONTACT_CAPABILITIES,
     ring_connection_add_contact_capabilities);
 }
 
@@ -219,7 +230,6 @@ ring_connection_constructed(GObject *object)
   repo = tp_base_connection_get_handles(base, TP_HANDLE_TYPE_CONTACT);
   self_handle = tp_handle_ensure(repo, ring_self_handle_name, NULL, NULL);
   tp_base_connection_set_self_handle(base, self_handle);
-  tp_handle_unref(repo, self_handle);
   g_assert(base->self_handle != 0);
 
   self->anon_handle = tp_handle_ensure(repo, "", NULL, NULL);
@@ -233,15 +243,10 @@ static void
 ring_connection_dispose(GObject *object)
 {
   RingConnection *self = RING_CONNECTION(object);
-  TpHandleRepoIface *repo = tp_base_connection_get_handles(
-    TP_BASE_CONNECTION(self), TP_HANDLE_TYPE_CONTACT);
 
   if (self->priv->dispose_has_run)
     return;
   self->priv->dispose_has_run = 1;
-
-  tp_handle_unref(repo, self->anon_handle), self->anon_handle = 0;
-  tp_handle_unref(repo, self->sos_handle), self->sos_handle = 0;
 
   if (self->priv->modem)
     g_object_unref (self->priv->modem);
@@ -779,7 +784,7 @@ ring_normalize_contact (char const *input,
   char *s;
   int i, j;
 
-  if (g_strcasecmp(input, ring_self_handle_name) == 0)
+  if (g_ascii_strcasecmp(input, ring_self_handle_name) == 0)
     return g_strdup(ring_self_handle_name);
 
   if (strlen(input) == strspn(input, "()-. "))
@@ -1751,7 +1756,7 @@ ring_connection_capabilities_iface_init(gpointer g_iface,
  * org.freedesktop.Telepathy.Connection.Interface.Capabilities
  */
 static void
-ring_connection_add_contact_capabilities(GObject *object,
+ring_connection_add_capabilities(GObject *object,
   GArray const *handles,
   GHashTable *returns)
 {
@@ -1783,4 +1788,117 @@ ring_connection_add_contact_capabilities(GObject *object,
       g_ptr_array_free(caps, TRUE);
     }
   }
+}
+
+/** Add contact attributes belonging to interface
+ * org.freedesktop.Telepathy.Connection.Interface.ContactCapabilities
+ */
+static void
+ring_connection_add_contact_capabilities(GObject *object,
+  GArray const *handles,
+  GHashTable *returns)
+{
+  RingConnection *self = RING_CONNECTION(object);
+  RingConnectionPrivate *priv = self->priv;
+  guint i, n = handles->len;
+
+  gboolean supports_sms = modem_supports_sms(self->priv->modem);
+  gboolean supports_call = modem_supports_call(self->priv->modem);
+
+  for (i = 0; i < n; i++) {
+    GValue *value;
+    guint handle = g_array_index(handles, guint, i);
+    GPtrArray *array = g_ptr_array_sized_new (2);
+
+    if (supports_sms)
+      ring_text_manager_add_contact_capabilities(priv->text, handle, array);
+
+    if (supports_call)
+      ring_media_manager_add_contact_capabilities(priv->media, handle, array);
+
+    if (array->len) {
+      value = tp_g_value_slice_new(TP_ARRAY_TYPE_REQUESTABLE_CHANNEL_CLASS_LIST);
+
+      g_value_take_boxed(value, array);
+      tp_contacts_mixin_set_contact_attribute(returns, handle,
+        TP_TOKEN_CONNECTION_INTERFACE_CONTACT_CAPABILITIES_CAPABILITIES,
+        value);
+    } else {
+      g_ptr_array_unref (array);
+    }
+  }
+}
+
+static void
+_free_rcc_list (gpointer data)
+{
+  GPtrArray *list = data;
+
+  g_boxed_free (TP_ARRAY_TYPE_REQUESTABLE_CHANNEL_CLASS_LIST, list);
+}
+
+static void
+ring_connection_get_contact_capabilities(
+  TpSvcConnectionInterfaceContactCapabilities *iface,
+  const GArray *contacts,
+  DBusGMethodInvocation *context)
+{
+  RingConnection *self = RING_CONNECTION(iface);
+  RingConnectionPrivate *priv = self->priv;
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION(self);
+  TpHandleRepoIface *contact_handles = tp_base_connection_get_handles(base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  guint i;
+  GHashTable *out;
+  GError *error = NULL;
+  gboolean supports_sms, supports_call;
+
+  TP_BASE_CONNECTION_ERROR_IF_NOT_CONNECTED(base_conn, context);
+
+  if (!tp_handles_are_valid(contact_handles, contacts, FALSE, &error)) {
+    dbus_g_method_return_error(context, error);
+    g_error_free(error);
+    return;
+  }
+
+  out = g_hash_table_new_full(NULL, NULL, NULL, _free_rcc_list);
+
+  supports_sms = modem_supports_sms(self->priv->modem);
+  supports_call = modem_supports_call(self->priv->modem);
+
+  for (i = 0; i < contacts->len; i++) {
+    TpHandle handle = g_array_index(contacts, TpHandle, i);
+    GPtrArray *array = g_ptr_array_sized_new(2);
+
+    if (supports_sms)
+      ring_text_manager_add_contact_capabilities(priv->text, handle, array);
+
+    if (supports_call)
+      ring_media_manager_add_contact_capabilities(priv->media, handle, array);
+
+    if (array->len > 0) {
+      g_hash_table_insert(out, GUINT_TO_POINTER(handle), array);
+    } else {
+      g_ptr_array_unref (array);
+    }
+  }
+
+  tp_svc_connection_interface_contact_capabilities_return_from_get_contact_capabilities(context, out);
+
+  g_hash_table_unref(out);
+}
+
+
+static void
+ring_connection_contact_capabilities_iface_init(gpointer g_iface,
+  gpointer iface_data)
+{
+  TpSvcConnectionInterfaceContactCapabilitiesClass *klass = g_iface;
+
+#define IMPLEMENT(x)                                            \
+  tp_svc_connection_interface_contact_capabilities_implement_##x (      \
+    klass, ring_connection_##x)
+  /* IMPLEMENT(advertise_capabilities); */
+  IMPLEMENT(get_contact_capabilities);
+#undef IMPLEMENT
 }
