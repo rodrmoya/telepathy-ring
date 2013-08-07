@@ -842,6 +842,52 @@ ring_call_channel_close(TpBaseChannel *_self)
   tp_base_channel_destroyed (_self);
 }
 
+/* ---------------------------------------------------------------------- */
+
+static void
+ring_call_channel_stopped_playing(ModemTones *tones,
+  guint source,
+  gpointer _self)
+{
+  RingCallChannel *self = RING_MEDIA_CHANNEL(_self);
+  RingCallChannelPrivate *priv = self->priv;
+
+  if (priv->playing == source) {
+    priv->playing = 0;
+
+    if (!self->call_instance) {
+      DEBUG("tone ended, closing");
+      ring_call_channel_close(RING_CALL_CHANNEL(self));
+    }
+  }
+
+  g_object_unref(self);
+}
+
+static void
+ring_call_channel_play_tone(RingCallChannel *self,
+  int tone,
+  int volume,
+  unsigned duration)
+{
+  RingCallChannelPrivate *priv = self->priv;
+
+  if (priv->closing)
+    return;
+
+  if (1)
+    /* XXX - no tones so far */
+    return;
+
+  if ((tone >= 0 && !modem_tones_is_playing(priv->tones, 0))
+    || priv->playing) {
+    priv->playing = modem_tones_start_full(priv->tones,
+                    tone, volume, duration,
+                    ring_call_channel_stopped_playing,
+                    g_object_ref(self));
+  }
+}
+
 static void
 ring_call_channel_update_state(RingMediaChannel *_self,
   guint state, guint causetype, guint cause)
@@ -858,8 +904,7 @@ ring_call_channel_update_state(RingMediaChannel *_self,
         modem_tones_stop(priv->tones, priv->playing);
       break;
     case MODEM_CALL_STATE_ALERTING:
-      ring_media_channel_play_tone(RING_MEDIA_CHANNEL(self),
-        TONES_EVENT_RINGING, 0, 0);
+      ring_call_channel_play_tone(self, TONES_EVENT_RINGING, 0, 0);
       break;
     case MODEM_CALL_STATE_DISCONNECTED:
       ring_call_channel_play_error_tone(self, state, causetype, cause);
@@ -928,8 +973,7 @@ ring_call_channel_play_error_tone(RingCallChannel *self,
     event_tone = TONES_EVENT_DROPPED, duration = 1200, volume = -3;
   }
 
-  ring_media_channel_play_tone(RING_MEDIA_CHANNEL(self),
-    event_tone, volume, duration);
+  ring_call_channel_play_tone(self, event_tone, volume, duration);
 }
 
 static void
@@ -1190,8 +1234,7 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
     return;
   }
 
-  ring_media_channel_play_tone(RING_MEDIA_CHANNEL(self),
-    modem_call_error_tone(error), 0, 4000);
+  ring_call_channel_play_tone(self, modem_call_error_tone(error), 0, 4000);
 
   reason = ring_channel_group_error_reason(error);
 
