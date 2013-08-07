@@ -108,4 +108,3 @@ ring_call_content_get_stream (RingCallContent *self)
 
   return self->priv->stream;
 }
-

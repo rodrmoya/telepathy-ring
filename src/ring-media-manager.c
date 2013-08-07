@@ -453,46 +453,6 @@ on_modem_call_emergency_numbers_changed (ModemCallService *call_service,
 }
 
 /* ---------------------------------------------------------------------- */
-/* Insert channel-type specific capabilities into array */
-
-void
-ring_media_manager_add_capabilities(RingMediaManager *self,
-  guint handle,
-  GPtrArray *returns)
-{
-  RingMediaManagerPrivate *priv = RING_MEDIA_MANAGER(self)->priv;
-  char const *id = ring_connection_inspect_contact(priv->connection, handle);
-  guint selfhandle = tp_base_connection_get_self_handle(
-    (TpBaseConnection *)priv->connection);
-
-  if (id == NULL)
-    return;
-
-  if (!ring_media_manager_is_connected (self))
-    return;
-
-  /* XXX - should check if we are in emergency call mode only status */
-
-  if (handle == selfhandle) {
-    if (priv->capability_flags)
-      g_ptr_array_add(returns,
-        ring_contact_capability_new(handle,
-          TP_IFACE_CHANNEL_TYPE_CALL,
-          TP_CONNECTION_CAPABILITY_FLAG_CREATE |
-          TP_CONNECTION_CAPABILITY_FLAG_INVITE,
-          RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));
-  }
-  else if (modem_call_is_valid_address (id)) {
-    g_ptr_array_add(returns,
-      ring_contact_capability_new(handle,
-        TP_IFACE_CHANNEL_TYPE_CALL,
-        TP_CONNECTION_CAPABILITY_FLAG_CREATE |
-        TP_CONNECTION_CAPABILITY_FLAG_INVITE,
-        RING_MEDIA_CHANNEL_CAPABILITY_FLAGS));
-  }
-}
-
-/* ---------------------------------------------------------------------- */
 /* TpChannelManagerIface interface */
 
 static GHashTable *
