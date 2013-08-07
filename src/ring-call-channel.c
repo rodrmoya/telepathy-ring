@@ -847,16 +847,15 @@ ring_call_channel_update_state(RingMediaChannel *_self,
   guint state, guint causetype, guint cause)
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
-#if nomore
   RingCallChannelPrivate *priv = self->priv;
-#endif
 
   switch (state) {
     case MODEM_CALL_STATE_DIALING:
     case MODEM_CALL_STATE_INCOMING:
     case MODEM_CALL_STATE_WAITING:
     case MODEM_CALL_STATE_ACTIVE:
-      ring_media_channel_stop_playing(RING_MEDIA_CHANNEL(self), TRUE);
+      if (priv->playing)
+        modem_tones_stop(priv->tones, priv->playing);
       break;
     case MODEM_CALL_STATE_ALERTING:
       ring_media_channel_play_tone(RING_MEDIA_CHANNEL(self),
