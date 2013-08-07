@@ -919,7 +919,12 @@ ring_call_channel_update_state(RingMediaChannel *_self,
       /* FALLTHROUGH */
 #endif
     case MODEM_CALL_STATE_INVALID:
-      ring_media_channel_idle_playing(RING_MEDIA_CHANNEL(self));
+      if (priv->playing) {
+        int event = modem_tones_playing_event(priv->tones, priv->playing);
+        if (event < TONES_EVENT_RADIO_PATH_ACK &&
+            modem_tones_is_playing(priv->tones, priv->playing) > 1200)
+          ring_media_channel_stop_playing(self, FALSE);
+      }
       break;
 
     default:
