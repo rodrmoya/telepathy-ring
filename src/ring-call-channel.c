@@ -748,7 +748,6 @@ ring_call_channel_close(TpBaseChannel *_self)
     if (!priv->release.message)
       priv->release.message = g_strdup("Channel closed");
     modem_call_request_release(self->call_instance, NULL, NULL);
-    return;
   }
   else if (priv->creating_call) {
     modem_request_cancel(priv->creating_call);
@@ -756,7 +755,7 @@ ring_call_channel_close(TpBaseChannel *_self)
     g_object_unref(self);
   }
 
-  return TRUE;
+  tp_base_channel_destroyed (_self);
 }
 
 static void
