@@ -500,9 +500,65 @@ ring_call_channel_get_interfaces (TpBaseChannel *self)
   return interfaces;
 }
 
+void reply_to_answer (ModemCall *call_instance,
+                      ModemRequest *request,
+                      GError *error,
+                      gpointer user_data);
+
 static void
-ring_call_channel_accept (TpBaseCallChannel *self)
+ring_call_channel_accept (TpBaseCallChannel *_self)
 {
+  guint state = 0;
+  RingCallChannel *self = RING_CALL_CHANNEL (_self);
+
+  if (self->call_instance == NULL) {
+    g_warning("Missing call instance");
+    return;
+  }
+
+  g_object_get (self->call_instance, "state", &state, NULL);
+  if (state == MODEM_CALL_STATE_DISCONNECTED) {
+    g_warning("Invalid call state");
+    return;
+  }
+
+  if (tp_base_channel_is_requested (TP_BASE_CHANNEL (self))) {
+    char const *destination;
+    TpHandle *handle = tp_base_channel_get_initiator(TP_BASE_CHANNEL(_self));
+
+    DEBUG("sending outgoing call");
+
+    destination = ring_connection_inspect_contact(
+      RING_CONNECTION(tp_base_channel_get_connection (TP_BASE_CHANNEL (_self))),
+      handle);
+
+    DEBUG("Trying to add %u=\"%s\" to remote pending", handle, destination);
+
+    g_assert(handle != 0);
+
+    if (!modem_call_is_valid_address(destination)) {
+      g_warning("Invalid handle for call channel");
+      return;
+    }
+
+    g_object_set(self, "peer", handle, NULL);
+
+    if (handle == self->priv->peer_handle) {
+      ring_call_channel_remote_pending(self, handle, "Remote accepted");
+    } else {
+      g_warning("Only one target allowed for call channel");
+      return;
+    }
+
+  } else {
+    DEBUG("accepting incoming call");
+
+    if (!self->priv->accepted)
+      self->priv->accepted = g_strdup("Call accepted");
+
+    modem_call_request_answer(self->call_instance, reply_to_answer,
+        g_strdup(self->nick));
+  }
 }
 
 static TpBaseCallContent *
