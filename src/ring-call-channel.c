@@ -849,7 +849,7 @@ ring_call_channel_stopped_playing(ModemTones *tones,
   guint source,
   gpointer _self)
 {
-  RingCallChannel *self = RING_MEDIA_CHANNEL(_self);
+  RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = self->priv;
 
   if (priv->playing == source) {
