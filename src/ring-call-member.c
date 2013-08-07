@@ -588,7 +588,7 @@ ring_call_member_get_transport_ns (RingCallMember *self)
 void
 ring_call_member_shutdown (RingCallMember *self)
 {
-  RingCallMemberPrivate *priv = self->priv;
+  /* RingCallMemberPrivate *priv = self->priv; */
 
   /* removing the content will remove it from our list */
   /* while (priv->contents != NULL) */
