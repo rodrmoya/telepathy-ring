@@ -576,7 +576,24 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
   TpMediaStreamDirection initial_direction,
   GError **error)
 {
-  return NULL; /* FIXME */
+  gchar *object_path;
+  TpBaseCallContent *result = NULL;
+
+  if (media != TP_MEDIA_STREAM_TYPE_AUDIO) {
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
+      "invalid stream type %d", media);
+    return NULL;
+  }
+
+  object_path = g_strdup_printf("%s/%s", tp_base_channel_get_object_path(self), name);
+
+  result = ring_call_content_new (tp_base_channel_get_connection(self),
+    object_path,
+    tp_base_channel_get_initiator(self));
+
+  g_free (object_path);
+
+  return result;
 }
 
 
