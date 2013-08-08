@@ -209,8 +209,6 @@ const char *ring_call_channel_interfaces[] = {
 static void ring_call_channel_fill_immutable_properties(TpBaseChannel *base,
     GHashTable *props);
 
-static void ring_call_channel_update_state(RingMediaChannel *_self,
-  guint state, guint causetype, guint cause);
 static void ring_call_channel_play_error_tone(RingCallChannel *self,
   guint state, guint causetype, guint cause);
 static void ring_call_channel_close(TpBaseChannel *self);
@@ -288,11 +286,10 @@ ring_call_channel_constructed(GObject *object)
   priv->constructed = 1;
 }
 
-static void
-ring_call_channel_emit_initial(RingMediaChannel *_self)
+void
+ring_call_channel_emit_initial(RingCallChannel *self)
 {
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(_self);
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
+  TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
   RingCallChannelPrivate *priv = self->priv;
   TpBaseChannel *base = TP_BASE_CHANNEL (self);
   TpHandle self_handle = mixin->self_handle;
@@ -888,11 +885,10 @@ ring_call_channel_play_tone(RingCallChannel *self,
   }
 }
 
-static void
-ring_call_channel_update_state(RingMediaChannel *_self,
+void
+ring_call_channel_update_state(RingCallChannel *self,
   guint state, guint causetype, guint cause)
 {
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = self->priv;
 
   switch (state) {
@@ -1857,6 +1853,33 @@ static void on_modem_call_state_waiting(RingCallChannel *self)
 {
 }
 
+static gboolean
+ring_call_channel_send_dialstring(RingCallChannel *self,
+  guint id,
+  char const *dialstring,
+  guint duration,
+  guint pause,
+  GError **error)
+{
+  RingCallChannelPrivate *priv = self->priv;
+
+  DEBUG("(%u, \"%s\", %u, %u) for %s",
+    id, dialstring, duration, pause, self->nick);
+
+  if (self->call_instance == NULL) {
+    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
+      "Channel is not connected");
+    return FALSE;
+  }
+  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) < 0) {
+    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
+      "Bad dial string");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
 static void on_modem_call_state_active(RingCallChannel *self)
 {
   RingCallChannelPrivate *priv = self->priv;
@@ -1913,7 +1936,7 @@ static void on_modem_call_state_active(RingCallChannel *self)
        subsequent 'C'" will be interpreted as a 3 second pause.
     */
 
-    if (!ring_media_channel_send_dialstring(RING_MEDIA_CHANNEL(self),
+    if (!ring_call_channel_send_dialstring(self,
         1, priv->dial2nd, 0, 0, NULL)) {
       DEBUG("Ignoring dialstring \"%s\"", priv->dial2nd);
     }

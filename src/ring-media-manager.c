@@ -828,7 +828,7 @@ ring_media_manager_new_object_path(RingMediaManager const *self,
 static const gchar*
 get_nick(TpBaseChannel *channel)
 {
-  return RING_MEDIA_CHANNEL (channel)->nick;
+  return RING_CALL_CHANNEL (channel)->nick;
 }
 
 void
@@ -860,7 +860,7 @@ ring_media_manager_emit_new_channel(RingMediaManager *self,
       TP_EXPORTABLE_CHANNEL(channel), requests);
 
     /* Emit Group and StreamedMedia signals */
-    ring_media_channel_emit_initial(RING_MEDIA_CHANNEL (channel));
+    ring_call_channel_emit_initial(RING_CALL_CHANNEL (channel));
   }
   else {
     DEBUG("new channel %p nick %s type %s failed with " GERROR_MSG_FMT,
@@ -986,8 +986,8 @@ on_modem_call_incoming(ModemCallService *call_service,
     modem_call_set_handler(modem_call, NULL);
     ring_critical("Call instance %s already associated with channel.",
       modem_call_get_name(modem_call));
-    ring_critical("Closing old channel %s.", RING_MEDIA_CHANNEL(channel)->nick);
-    ring_media_channel_close(RING_MEDIA_CHANNEL(channel));
+    ring_critical("Closing old channel %s.", RING_CALL_CHANNEL(channel)->nick);
+    tp_base_channel_close(TP_BASE_CHANNEL(channel));
   }
 
   repo = tp_base_connection_get_handles(
@@ -1025,7 +1025,7 @@ on_modem_call_incoming(ModemCallService *call_service,
   g_free(object_path);
 
   ring_media_manager_emit_new_channel(self, NULL, channel, NULL);
-  ring_media_channel_set_state(RING_MEDIA_CHANNEL(channel),
+  ring_call_channel_update_state(RING_CALL_CHANNEL(channel),
     MODEM_CALL_STATE_INCOMING, 0, 0);
 }
 
@@ -1090,7 +1090,7 @@ on_modem_call_created(ModemCallService *call_service,
   g_free(object_path);
 
   ring_media_manager_emit_new_channel(self, NULL, channel, NULL);
-  ring_media_channel_set_state(RING_MEDIA_CHANNEL(channel),
+  ring_call_channel_update_state(RING_CALL_CHANNEL(channel),
     MODEM_CALL_STATE_DIALING, 0, 0);
 }
 

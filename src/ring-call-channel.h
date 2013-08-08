@@ -78,6 +78,11 @@ void ring_call_channel_initial_audio(RingCallChannel *self,
   RingMediaManager *manager,
   gpointer channelrequest);
 
+void ring_call_channel_update_state(RingCallChannel *self,
+  guint state, guint causetype, guint cause);
+
+void ring_call_channel_emit_initial(RingCallChannel *self);
+
 G_END_DECLS
 
 #endif /* #ifndef RING_CALL_CHANNEL_H*/
