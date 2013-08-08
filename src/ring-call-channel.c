@@ -1232,7 +1232,7 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
     g_assert(self->call_instance == NULL);
     g_object_set(self, "call-instance", ci, NULL);
     if (priv->release.message == NULL)
-      ring_media_channel_set_state(RING_MEDIA_CHANNEL(self),
+      ring_call_channel_update_state(self,
         MODEM_CALL_STATE_DIALING, 0, 0);
     else
       modem_call_request_release(ci, NULL, NULL);
