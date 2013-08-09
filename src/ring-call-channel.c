@@ -873,7 +873,7 @@ ring_call_channel_stopped_playing(ModemTones *tones,
 
     if (!self->call_instance) {
       DEBUG("tone ended, closing");
-      ring_call_channel_close(RING_CALL_CHANNEL(self));
+      ring_call_channel_close(TP_BASE_CHANNEL(self));
     }
   }
 
@@ -1275,7 +1275,7 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
   g_free(debug);
 
   if (!priv->playing)
-    ring_call_channel_close(RING_CALL_CHANNEL(self));
+    ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1716,7 +1716,7 @@ ring_call_channel_remove_member_with_reason(GObject *iface,
     tp_group_mixin_change_members(iface, message, NULL, set, NULL, NULL,
       mixin->self_handle, reason);
     tp_intset_destroy(set);
-    ring_call_channel_close(RING_CALL_CHANNEL(self));
+    ring_call_channel_close(TP_BASE_CHANNEL(self));
   }
 
   return TRUE;
