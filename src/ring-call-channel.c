@@ -1880,8 +1880,6 @@ ring_call_channel_send_dialstring(RingCallChannel *self,
   guint pause,
   GError **error)
 {
-  RingCallChannelPrivate *priv = self->priv;
-
   DEBUG("(%u, \"%s\", %u, %u) for %s",
     id, dialstring, duration, pause, self->nick);
 
