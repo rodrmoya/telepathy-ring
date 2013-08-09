@@ -625,10 +625,10 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
   base_call_class->accept = ring_call_channel_accept;
   base_call_class->add_content = ring_call_channel_add_content;
 
-  base_chan_class->dbus_props_class.interfaces =
+  klass->dbus_properties_class.interfaces =
     ring_call_channel_dbus_property_interfaces;
   tp_dbus_properties_mixin_class_init(object_class,
-    G_STRUCT_OFFSET(TpBaseChannelClass, dbus_props_class));
+    G_STRUCT_OFFSET(RingCallChannelClass, dbus_properties_class));
   tp_group_mixin_init_dbus_properties(object_class);
 
   tp_group_mixin_class_init(
