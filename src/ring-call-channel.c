@@ -576,8 +576,9 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
   TpMediaStreamDirection initial_direction,
   GError **error)
 {
+  TpBaseChannel *base = TP_BASE_CHANNEL (self);
   gchar *object_path;
-  TpBaseCallContent *result = NULL;
+  RingCallContent *result = NULL;
 
   if (media != TP_MEDIA_STREAM_TYPE_AUDIO) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
@@ -585,15 +586,16 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
     return NULL;
   }
 
-  object_path = g_strdup_printf("%s/%s", tp_base_channel_get_object_path(self), name);
+  object_path = g_strdup_printf("%s/%s", tp_base_channel_get_object_path(base), name);
 
-  result = ring_call_content_new (tp_base_channel_get_connection(self),
-    object_path,
-    tp_base_channel_get_initiator(self));
+  result = ring_call_content_new (
+      RING_CONNECTION(tp_base_channel_get_connection(base)),
+      object_path,
+      tp_base_channel_get_initiator(base));
 
   g_free (object_path);
 
-  return result;
+  return TP_BASE_CALL_CONTENT(result);
 }
 
 
