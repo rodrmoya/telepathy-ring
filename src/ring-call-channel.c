@@ -532,7 +532,7 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
 
   if (tp_base_channel_is_requested (TP_BASE_CHANNEL (self))) {
     char const *destination;
-    TpHandle *handle = tp_base_channel_get_initiator(TP_BASE_CHANNEL(_self));
+    TpHandle handle = tp_base_channel_get_initiator(TP_BASE_CHANNEL(_self));
 
     DEBUG("sending outgoing call");
 
