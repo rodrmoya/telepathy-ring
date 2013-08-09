@@ -485,7 +485,7 @@ gboolean
 tp_asv_get_initial_audio (GHashTable *properties, gboolean default_value)
 {
   GValue *value = g_hash_table_lookup (properties,
-                  TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA ".InitialAudio");
+                  TP_IFACE_CHANNEL_TYPE_CALL ".InitialAudio");
 
   if (value && G_VALUE_HOLDS_BOOLEAN (value))
     return g_value_get_boolean (value);
@@ -497,7 +497,7 @@ gboolean
 tp_asv_get_initial_video (GHashTable *properties, gboolean default_value)
 {
   GValue *value = g_hash_table_lookup (properties,
-      TP_IFACE_CHANNEL_TYPE_STREAMED_MEDIA ".InitialVideo");
+      TP_IFACE_CHANNEL_TYPE_CALL ".InitialVideo");
 
   if (value && G_VALUE_HOLDS_BOOLEAN (value))
     return g_value_get_boolean (value);
