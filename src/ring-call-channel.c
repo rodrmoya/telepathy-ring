@@ -476,10 +476,6 @@ ring_call_channel_dispose(GObject *object)
 
   priv->member.handle = 0;
 
-  /* If still holding on to a call instance, disconnect */
-  if (self->call_instance)
-    ring_call_channel_set_call_instance (self, NULL);
-
   if (priv->playing)
     modem_tones_stop(priv->tones, priv->playing);
 
