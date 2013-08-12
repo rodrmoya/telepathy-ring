@@ -1077,7 +1077,7 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
     ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
-static gboolean
+G_GNUC_UNUSED static gboolean
 ring_call_channel_validate_media_handle (gpointer _self,
                                          guint *handlep,
                                          GError **error)
@@ -1137,7 +1137,7 @@ static void reply_to_modem_call_request_dial(ModemCallService *_service,
   GError *error,
   gpointer _channel);
 
-static gboolean
+G_GNUC_UNUSED static gboolean
 ring_call_channel_create_streams (gpointer _self,
   TpHandle handle,
   gboolean audio,
