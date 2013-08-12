@@ -287,6 +287,8 @@ ring_call_channel_constructed(GObject *object)
     tp_base_connection_get_handles(connection, TP_HANDLE_TYPE_CONTACT),
     self_handle);
 
+  tp_base_channel_register(base);
+
   priv->constructed = 1;
 }
 
