@@ -1953,6 +1953,7 @@ static void on_modem_call_state_active(RingCallChannel *self)
 {
   RingCallChannelPrivate *priv = self->priv;
   TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
+  TpHandle actor;
 
   if (tp_handle_set_size(mixin->local_pending) ||
     tp_handle_set_size(mixin->remote_pending)) {
@@ -2012,6 +2013,16 @@ static void on_modem_call_state_active(RingCallChannel *self)
 
     g_free(priv->dial2nd), priv->dial2nd = NULL;
   }
+
+  if (tp_base_channel_is_requested (TP_BASE_CHANNEL (self)))
+    actor = tp_base_channel_get_target_handle (TP_BASE_CHANNEL (self));
+  else
+    actor = tp_base_channel_get_self_handle (TP_BASE_CHANNEL (self));
+
+  tp_base_call_channel_set_state (TP_BASE_CALL_CHANNEL (self),
+      TP_CALL_STATE_ACTIVE, actor,
+      TP_CALL_STATE_CHANGE_REASON_USER_REQUESTED,
+      "", "call state change to active");
 }
 
 static void
