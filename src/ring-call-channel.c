@@ -162,6 +162,8 @@ enum
   PROP_CALL_INSTANCE,
   PROP_TONES,
 
+  PROP_HARDWARE_STREAMING, /* ofdT.Channel.Type.Call1.HardwareStreaming */
+
   LAST_PROPERTY
 };
 
@@ -399,6 +401,9 @@ ring_call_channel_get_property(GObject *obj,
       break;
     case PROP_INITIAL_REMOTE:
       g_value_set_uint(value, priv->initial_remote);
+      break;
+    case PROP_HARDWARE_STREAMING:
+      g_value_set_boolean(value, TRUE);
       break;
     case PROP_CALL_INSTANCE:
       g_value_set_pointer(value, self->call_instance);
@@ -765,6 +770,9 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
           /* MODEM_TYPE_CALL, */
           G_PARAM_READWRITE |
           G_PARAM_STATIC_STRINGS));
+
+  g_object_class_override_property (object_class, PROP_HARDWARE_STREAMING,
+      "hardware-streaming");
 }
 
 /* ====================================================================== */
