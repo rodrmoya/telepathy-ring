@@ -1193,7 +1193,7 @@ ring_media_channel_send_dialstring(RingMediaChannel *self,
       "Already sending a dial string");
     return FALSE;
   }
-  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) < 0) {
+  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) == NULL) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Bad dial string");
     return FALSE;

@@ -1940,7 +1940,7 @@ ring_call_channel_send_dialstring(RingCallChannel *self,
       "Channel is not connected");
     return FALSE;
   }
-  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) < 0) {
+  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) == NULL) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Bad dial string");
     return FALSE;
