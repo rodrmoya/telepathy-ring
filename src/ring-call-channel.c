@@ -1077,7 +1077,7 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
     ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
-static gboolean
+G_GNUC_UNUSED static gboolean
 ring_call_channel_validate_media_handle (gpointer _self,
                                          guint *handlep,
                                          GError **error)
@@ -1137,7 +1137,7 @@ static void reply_to_modem_call_request_dial(ModemCallService *_service,
   GError *error,
   gpointer _channel);
 
-static gboolean
+G_GNUC_UNUSED static gboolean
 ring_call_channel_create_streams (gpointer _self,
   TpHandle handle,
   gboolean audio,
@@ -1940,7 +1940,7 @@ ring_call_channel_send_dialstring(RingCallChannel *self,
       "Channel is not connected");
     return FALSE;
   }
-  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) < 0) {
+  else if (modem_call_send_dtmf(self->call_instance, dialstring, NULL, NULL) == NULL) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "Bad dial string");
     return FALSE;

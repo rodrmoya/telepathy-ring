@@ -1,26 +1,64 @@
-AC_INIT([telepathy-ring], [2.2.1])
 AC_PREREQ([2.59])
-AM_INIT_AUTOMAKE([foreign 1.9])
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
+# Making releases:
+#   set the new version number:
+#     odd minor -> development series
+#     even minor -> stable series
+#     increment micro for each release within a series
+#   set ring_nano_version to 0.
+m4_define([ring_major_version], [2])
+m4_define([ring_minor_version], [2])
+m4_define([ring_micro_version], [1])
+m4_define([ring_nano_version], [1])
+
+# Some magic
+m4_define([ring_base_version],
+          [ring_major_version.ring_minor_version.ring_micro_version])
+m4_define([ring_version],
+          [m4_if(ring_nano_version, 0, [ring_base_version],
+              [ring_base_version].[ring_nano_version])])
+
+AC_INIT([Telepathy Ring], [ring_version])
 AC_CONFIG_MACRO_DIR([m4])
 
+AM_INIT_AUTOMAKE([foreign 1.9])
+
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
+
+AM_PROG_LIBTOOL
 AM_CONFIG_HEADER([config.h])
 
+dnl check for tools
 AC_PROG_CC
 AC_PROG_CC_STDC
 
-dnl Not yet
-AM_PROG_LIBTOOL
+ifelse(ring_nano_version, 0,
+    [ official_release=yes ],
+    [ official_release=no ])
 
 dnl decide on error flags
-AS_COMPILER_FLAG(-Wall, [
-  ERROR_CFLAGS="-Wall"
-  if test "x$WERROR" = "xyes"; then
-    AS_COMPILER_FLAG(-Werror,ERROR_CFLAGS="$ERROR_CFLAGS -Werror",ERROR_CFLAGS="$ERROR_CFLAGS")
-  fi
-])
-AC_SUBST(ERROR_CFLAGS)
+TP_COMPILER_WARNINGS([ERROR_CFLAGS], [test "x$official_release" = xno],
+  [all \
+   extra \
+   strict-prototypes \
+   nested-externs \
+   pointer-arith \
+   format-security \
+   init-self],
+  [missing-field-initializers \
+   unused-parameter \
+   sign-compare \
+   type-limits])
+AC_SUBST([ERROR_CFLAGS])
+
+# missing:
+#   missing-declarations
+#   declaration-after-statement
+#   missing-prototypes
+#   sign-compare
+#   shadow
+# shouldn't be in undesired:
+#   type-limits
 
 AM_MAINTAINER_MODE
 
