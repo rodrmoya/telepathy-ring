@@ -158,7 +158,7 @@ enum
 
   PROP_PEER,
   PROP_INITIAL_REMOTE,
-
+  PROP_CALL_INSTANCE,
   PROP_TONES,
 
   LAST_PROPERTY
@@ -398,6 +398,9 @@ ring_call_channel_get_property(GObject *obj,
     case PROP_INITIAL_REMOTE:
       g_value_set_uint(value, priv->initial_remote);
       break;
+    case PROP_CALL_INSTANCE:
+      g_value_set_pointer(value, self->call_instance);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, property_id, pspec);
       break;
@@ -440,6 +443,9 @@ ring_call_channel_set_property(GObject *obj,
     case PROP_TONES:
       /* media manager owns tones as well as a reference to this channel */
       priv->tones = g_value_get_object(value);
+      break;
+    case PROP_CALL_INSTANCE:
+      ring_call_channel_set_call_instance(self, g_value_get_pointer (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, property_id, pspec);
@@ -748,6 +754,15 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
       G_PARAM_WRITABLE |
       G_PARAM_CONSTRUCT_ONLY |
       G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (object_class,
+      PROP_CALL_INSTANCE,
+      g_param_spec_pointer ("call-instance",
+          "ModemCall Object",
+          "ModemCall instance for this channel",
+          /* MODEM_TYPE_CALL, */
+          G_PARAM_READWRITE |
+          G_PARAM_STATIC_STRINGS));
 }
 
 /* ====================================================================== */
