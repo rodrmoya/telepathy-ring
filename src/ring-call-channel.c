@@ -120,6 +120,7 @@ struct _RingCallChannelPrivate
     gulong emergency;
     gulong waiting, on_hold, forwarded;
     gulong notify_multiparty;
+    gulong state;
   } signals;
 
   struct {
@@ -226,6 +227,7 @@ static gboolean ring_call_channel_create_streams (gpointer _self,
 static ModemCallService *ring_call_channel_get_call_service (RingCallChannel *self);
 static guint ring_call_channel_get_member_handle(RingCallChannel *self);
 
+static void on_modem_call_state(ModemCall *, ModemCallState, RingCallChannel *self);
 static void on_modem_call_state_dialing(RingCallChannel *self);
 static void on_modem_call_state_incoming(RingCallChannel *self);
 static void on_modem_call_state_waiting(RingCallChannel *self);
@@ -1017,13 +1019,20 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = self->priv;
+  ModemCall *old = self->call_instance;
+
+  if (ci == old)
+    return;
 
   if (ci) {
+    modem_call_set_handler(ci, self);
+
     priv->call_instance_seen = 1;
 
 #define CONNECT(n, f)                                                   \
     g_signal_connect(ci, n, G_CALLBACK(on_modem_call_ ## f), self)
 
+    priv->signals.state = CONNECT("state", state);
     priv->signals.waiting = CONNECT("waiting", waiting);
     priv->signals.emergency = CONNECT("emergency", emergency);
     priv->signals.on_hold = CONNECT("on-hold", on_hold);
@@ -1032,7 +1041,7 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
 #undef CONNECT
   }
   else {
-    ci = self->call_instance;
+    modem_call_set_handler(old, NULL);
 
 #define DISCONNECT(n)                                           \
     if (priv->signals.n &&                                      \
@@ -1047,6 +1056,15 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
     DISCONNECT(notify_multiparty);
 #undef DISCONNECT
   }
+
+  if (old)
+    g_object_unref (old);
+  self->call_instance = ci;
+  if (ci)
+    g_object_ref (ci);
+
+  if (ci == NULL && !priv->playing)
+    ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
 static gboolean
@@ -1555,6 +1573,15 @@ static void ring_update_call_state(RingCallChannel *self,
       TP_SVC_CHANNEL_INTERFACE_CALL_STATE(self),
       priv->peer_handle, call_state);
   }
+}
+
+static void
+on_modem_call_state(ModemCall *ci,
+  ModemCallState state,
+  RingCallChannel *self)
+{
+  ring_call_channel_update_state(
+    RING_CALL_CHANNEL(self), state, 0, 0);
 }
 
 /** Remote end has put us on hold */
