@@ -1055,8 +1055,8 @@ ring_call_channel_set_call_instance(RingCallChannel *_self,
 
 #define DISCONNECT(n)                                           \
     if (priv->signals.n &&                                      \
-      g_signal_handler_is_connected(ci, priv->signals.n)) {     \
-      g_signal_handler_disconnect(ci, priv->signals.n);         \
+      g_signal_handler_is_connected(old, priv->signals.n)) {     \
+      g_signal_handler_disconnect(old, priv->signals.n);         \
     } (priv->signals.n = 0)
 
     DISCONNECT(waiting);
