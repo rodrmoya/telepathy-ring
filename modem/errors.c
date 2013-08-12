@@ -379,8 +379,8 @@ modem_sms_error_get_type (void)
 
 typedef struct _ModemErrorMapping ModemErrorMapping;
 
-struct {
-  GStaticRWLock lock;
+typedef struct {
+  GRWLock lock;
   struct _ModemErrorMapping {
     ModemErrorMapping *next;
     GQuark domain;
@@ -388,11 +388,9 @@ struct {
     char const *prefix;
     gsize prefixlen;
   } *list;
-} modem_registered_errors =
-  {
-    G_STATIC_RW_LOCK_INIT,
-    NULL,
-  };
+} RegisteredErrors;
+
+RegisteredErrors modem_registered_errors;
 
 static ModemErrorMapping **
 modem_error_append_mapping (ModemErrorMapping **list,
@@ -419,7 +417,7 @@ modem_registered_errors_writer_lock (void)
 {
   ModemErrorMapping **list;
 
-  g_static_rw_lock_writer_lock (&modem_registered_errors.lock);
+  g_rw_lock_writer_lock (&modem_registered_errors.lock);
 
   list = &modem_registered_errors.list;
 
@@ -443,7 +441,7 @@ modem_registered_errors_writer_lock (void)
 static void
 modem_registered_errors_writer_unlock (void)
 {
-  g_static_rw_lock_writer_unlock (&modem_registered_errors.lock);
+  g_rw_lock_writer_unlock (&modem_registered_errors.lock);
 }
 
 static ModemErrorMapping const *
@@ -455,7 +453,7 @@ modem_registered_errors_reader_lock (void)
       modem_registered_errors_writer_unlock ();
     }
 
-  g_static_rw_lock_reader_lock (&modem_registered_errors.lock);
+  g_rw_lock_reader_lock (&modem_registered_errors.lock);
 
   return modem_registered_errors.list;
 }
@@ -463,7 +461,7 @@ modem_registered_errors_reader_lock (void)
 static void
 modem_registered_errors_reader_unlock (void)
 {
-  g_static_rw_lock_reader_unlock (&modem_registered_errors.lock);
+  g_rw_lock_reader_unlock (&modem_registered_errors.lock);
 }
 
 void
