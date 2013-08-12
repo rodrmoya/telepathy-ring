@@ -558,7 +558,7 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
     g_assert(handle != 0);
 
     if (!modem_call_is_valid_address(destination)) {
-      g_warning("Invalid handle for call channel");
+      g_warning("Invalid handle for call channel: %s", destination);
       return;
     }
 
