@@ -133,7 +133,7 @@ struct _RingCallChannelPrivate
   guint playing;
   ModemTones *tones;
 
-  GQueue *requests;
+  GQueue requests[1];
 };
 
 /* properties */
