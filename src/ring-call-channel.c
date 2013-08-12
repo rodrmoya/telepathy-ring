@@ -1061,6 +1061,7 @@ ring_call_channel_set_call_instance(RingCallChannel *self,
       g_signal_handler_disconnect(old, priv->signals.n);         \
     } (priv->signals.n = 0)
 
+    DISCONNECT(state);
     DISCONNECT(waiting);
     DISCONNECT(emergency);
     DISCONNECT(on_hold);
