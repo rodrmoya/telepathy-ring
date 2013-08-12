@@ -133,7 +133,7 @@ struct _RingCallChannelPrivate
   guint playing;
   ModemTones *tones;
 
-  GQueue requests[1];
+  GQueue *requests;
 };
 
 /* properties */
@@ -281,6 +281,8 @@ ring_call_channel_constructed(GObject *object)
     g_assert(priv->peer_handle == tp_base_channel_get_target_handle (base));
 
   self_handle = tp_base_connection_get_self_handle(connection);
+
+  priv->requests = g_queue_new();
 
   tp_group_mixin_init(
     object, G_STRUCT_OFFSET(RingCallChannel, group),
@@ -868,8 +870,13 @@ ring_call_channel_close(TpBaseChannel *_self)
     g_assert(priv->member.conference == NULL);
   }
 
-  while (!g_queue_is_empty(priv->requests))
-    modem_request_cancel(g_queue_pop_head(priv->requests));
+  if (priv->requests) {
+    while (!g_queue_is_empty(priv->requests))
+      modem_request_cancel(g_queue_pop_head(priv->requests));
+
+    g_queue_free(priv->requests);
+    priv->requests = NULL;
+  }
 
   if (self->call_instance) {
     if (!priv->release.message)
