@@ -1027,10 +1027,9 @@ ring_call_channel_play_error_tone(RingCallChannel *self,
 }
 
 static void
-ring_call_channel_set_call_instance(RingCallChannel *_self,
+ring_call_channel_set_call_instance(RingCallChannel *self,
   ModemCall *ci)
 {
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = self->priv;
   ModemCall *old = self->call_instance;
 
