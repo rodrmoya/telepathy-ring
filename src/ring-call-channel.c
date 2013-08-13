@@ -289,6 +289,21 @@ ring_call_channel_constructed(GObject *object)
     tp_base_connection_get_handles(connection, TP_HANDLE_TYPE_CONTACT),
     self_handle);
 
+  if (tp_base_call_channel_has_initial_audio(TP_BASE_CALL_CHANNEL(self), NULL)) {
+    gchar *object_path;
+    RingCallContent *content;
+
+    object_path = g_strdup_printf("%s/Content/InitialAudio", tp_base_channel_get_object_path(base));
+
+    content = ring_call_content_new (
+      RING_CONNECTION(tp_base_channel_get_connection(base)),
+      object_path,
+      tp_base_channel_get_initiator(base));
+    tp_base_call_channel_add_content(TP_BASE_CALL_CHANNEL(self), TP_BASE_CALL_CONTENT(content));
+
+    g_free(object_path);
+  }
+
   tp_base_channel_register(base);
 
   priv->constructed = 1;
@@ -599,12 +614,14 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
     return NULL;
   }
 
-  object_path = g_strdup_printf("%s/%s", tp_base_channel_get_object_path(base), name);
+  object_path = g_strdup_printf("%s/Content/%s", tp_base_channel_get_object_path(base), name);
 
   result = ring_call_content_new (
       RING_CONNECTION(tp_base_channel_get_connection(base)),
       object_path,
       tp_base_channel_get_initiator(base));
+  if (result != NULL)
+    tp_base_call_channel_add_content(TP_BASE_CALL_CHANNEL(self), (TpBaseCallContent *) result);
 
   g_free (object_path);
 
