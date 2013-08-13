@@ -290,18 +290,7 @@ ring_call_channel_constructed(GObject *object)
     self_handle);
 
   if (tp_base_call_channel_has_initial_audio(TP_BASE_CALL_CHANNEL(self), NULL)) {
-    gchar *object_path;
-    RingCallContent *content;
-
-    object_path = g_strdup_printf("%s/Content/InitialAudio", tp_base_channel_get_object_path(base));
-
-    content = ring_call_content_new (
-      RING_CONNECTION(tp_base_channel_get_connection(base)),
-      object_path,
-      tp_base_channel_get_initiator(base));
-    tp_base_call_channel_add_content(TP_BASE_CALL_CHANNEL(self), TP_BASE_CALL_CONTENT(content));
-
-    g_free(object_path);
+    ring_base_call_channel_add_content(RING_BASE_CALL_CHANNEL(self), "InitialAudio", TP_CALL_CONTENT_DISPOSITION_INITIAL);
   }
 
   tp_base_channel_register(base);
@@ -604,28 +593,13 @@ ring_call_channel_add_content (TpBaseCallChannel *self,
   TpMediaStreamDirection initial_direction,
   GError **error)
 {
-  TpBaseChannel *base = TP_BASE_CHANNEL (self);
-  gchar *object_path;
-  RingCallContent *result = NULL;
-
   if (media != TP_MEDIA_STREAM_TYPE_AUDIO) {
     g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
       "invalid stream type %d", media);
     return NULL;
   }
 
-  object_path = g_strdup_printf("%s/Content/%s", tp_base_channel_get_object_path(base), name);
-
-  result = ring_call_content_new (
-      RING_CONNECTION(tp_base_channel_get_connection(base)),
-      object_path,
-      tp_base_channel_get_initiator(base));
-  if (result != NULL)
-    tp_base_call_channel_add_content(TP_BASE_CALL_CHANNEL(self), (TpBaseCallContent *) result);
-
-  g_free (object_path);
-
-  return TP_BASE_CALL_CONTENT(result);
+  return (TpBaseCallContent *) ring_base_call_channel_add_content(RING_BASE_CALL_CHANNEL(self), name, TP_CALL_CONTENT_DISPOSITION_INITIAL);
 }
 
 
