@@ -51,6 +51,7 @@ RingCallContent *ring_call_content_new (RingConnection *connection,
     TpHandle creator);
 
 RingCallStream *ring_call_content_get_stream (RingCallContent *self);
+void ring_call_content_add_stream (RingCallContent *self);
 
 /* TYPE MACROS */
 #define RING_TYPE_CALL_CONTENT \

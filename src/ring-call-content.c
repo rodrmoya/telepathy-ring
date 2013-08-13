@@ -46,21 +46,8 @@ ring_call_content_init (RingCallContent *self)
 static void
 ring_call_content_constructed (GObject *object)
 {
-  RingCallContent *self = RING_CALL_CONTENT (object);
-  RingCallContentPrivate *priv = self->priv;
-  TpBaseCallContent *base = TP_BASE_CALL_CONTENT (self);
-  gchar *stream_path;
-
   if (G_OBJECT_CLASS (ring_call_content_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (ring_call_content_parent_class)->constructed (object);
-
-  stream_path = g_strdup_printf ("%s/%s",
-      tp_base_call_content_get_object_path (base), "stream");
-  priv->stream = ring_call_stream_new (
-      RING_CONNECTION(tp_base_call_content_get_connection (base)), stream_path);
-  tp_base_call_content_add_stream (base,
-      TP_BASE_CALL_STREAM (priv->stream));
-  g_free (stream_path);
 }
 
 static void
@@ -107,4 +94,22 @@ ring_call_content_get_stream (RingCallContent *self)
   g_return_val_if_fail (RING_IS_CALL_CONTENT (self), NULL);
 
   return self->priv->stream;
+}
+
+void
+ring_call_content_add_stream (RingCallContent *self)
+{
+  gchar *stream_path;
+  RingCallContentPrivate *priv = self->priv;
+  TpBaseCallContent *base = TP_BASE_CALL_CONTENT (self);
+
+  g_return_if_fail (RING_IS_CALL_CONTENT (self));
+
+  stream_path = g_strdup_printf ("%s/%s",
+      tp_base_call_content_get_object_path (base), "stream");
+  priv->stream = ring_call_stream_new (
+      RING_CONNECTION(tp_base_call_content_get_connection (base)), stream_path);
+  tp_base_call_content_add_stream (base,
+      TP_BASE_CALL_STREAM (priv->stream));
+  g_free (stream_path);
 }

@@ -151,6 +151,8 @@ ring_base_call_channel_add_content (RingBaseCallChannel *self,
   tp_base_call_channel_add_content (TP_BASE_CALL_CHANNEL (self),
     content);
 
+  ring_call_content_add_stream(RING_CALL_CONTENT(content));
+
   return RING_CALL_CONTENT (content);
 }
 
