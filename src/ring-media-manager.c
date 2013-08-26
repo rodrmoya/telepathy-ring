@@ -488,7 +488,6 @@ static char const * const ring_call_channel_allowed_properties[] =
   TP_IFACE_CHANNEL ".TargetHandle",
   TP_IFACE_CHANNEL ".TargetID",
   TP_IFACE_CHANNEL_TYPE_CALL ".InitialAudio",
-  TP_IFACE_CHANNEL_TYPE_CALL ".InitialVideo",
   NULL
 };
 
