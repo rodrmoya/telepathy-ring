@@ -81,7 +81,6 @@ enum
 
 typedef enum
 {
-  METHOD_COMPATIBLE,
   METHOD_CREATE,
   METHOD_ENSURE
 } RequestotronMethod;
@@ -110,7 +109,6 @@ static char *ring_media_manager_new_object_path(RingMediaManager const *self,
 static gboolean ring_media_manager_outgoing_call(RingMediaManager *self,
   gpointer request,
   guint target,
-  guint initial_remote,
   char const *emergency,
   gboolean initial_audio);
 
@@ -480,6 +478,12 @@ ring_call_channel_fixed_properties(void)
 
   g_hash_table_insert(hash, (gpointer)key, value);
 
+  key = TP_IFACE_CHANNEL_TYPE_CALL ".InitialAudio";
+  value = tp_g_value_slice_new(G_TYPE_BOOLEAN);
+  g_value_set_boolean(value, TRUE);
+
+  g_hash_table_insert(hash, (gpointer)key, value);
+
   return hash;
 }
 
@@ -487,40 +491,6 @@ static char const * const ring_call_channel_allowed_properties[] =
 {
   TP_IFACE_CHANNEL ".TargetHandle",
   TP_IFACE_CHANNEL ".TargetID",
-  TP_IFACE_CHANNEL_TYPE_CALL ".InitialAudio",
-  NULL
-};
-
-static GHashTable *
-ring_anon_channel_fixed_properties(void)
-{
-  static GHashTable *hash;
-
-  if (hash)
-    return hash;
-
-  hash = g_hash_table_new(g_str_hash, g_str_equal);
-
-  char const *key;
-  GValue *value;
-
-  key = TP_IFACE_CHANNEL ".TargetHandleType";
-  value = tp_g_value_slice_new(G_TYPE_UINT);
-  g_value_set_uint(value, TP_HANDLE_TYPE_NONE);
-
-  g_hash_table_insert(hash, (gpointer)key, value);
-
-  key = TP_IFACE_CHANNEL ".ChannelType";
-  value = tp_g_value_slice_new(G_TYPE_STRING);
-  g_value_set_static_string(value, TP_IFACE_CHANNEL_TYPE_CALL);
-
-  g_hash_table_insert(hash, (gpointer)key, value);
-
-  return hash;
-}
-
-static char const * const ring_anon_channel_allowed_properties[] =
-{
   NULL
 };
 
@@ -563,16 +533,6 @@ ring_media_manager_foreach_channel(TpChannelManager *_self,
     func(channel, user_data);
 }
 
-/** Request a RingMediaChannel. */
-static gboolean
-ring_media_manager_request_channel(TpChannelManager *_self,
-  gpointer request,
-  GHashTable *properties)
-{
-  return ring_media_requestotron(
-    RING_MEDIA_MANAGER(_self), request, properties, METHOD_COMPATIBLE);
-}
-
 /** Create a new RingMediaChannel. */
 static gboolean
 ring_media_manager_create_channel(TpChannelManager *_self,
@@ -604,7 +564,6 @@ channel_manager_iface_init(gpointer ifacep,
   IMPLEMENT(foreach_channel);
   IMPLEMENT(foreach_channel_class);
   IMPLEMENT(create_channel);
-  IMPLEMENT(request_channel);
   IMPLEMENT(ensure_channel);
 
 #undef IMPLEMENT
@@ -691,14 +650,6 @@ ring_media_requestotron(RingMediaManager *self,
   handle = tp_asv_get_uint32 (properties,
       TP_IFACE_CHANNEL ".TargetHandle", NULL);
 
-  if (kind == METHOD_COMPATIBLE &&
-    handle == 0 &&
-    ring_properties_satisfy(properties,
-      ring_anon_channel_fixed_properties(),
-      ring_anon_channel_allowed_properties)) {
-    return ring_media_manager_outgoing_call(self, request, 0, 0, NULL, FALSE);
-  }
-
   if (tp_asv_get_initial_video (properties, FALSE))
     {
       tp_channel_manager_emit_request_failed (self, request,
@@ -707,8 +658,7 @@ ring_media_requestotron(RingMediaManager *self,
       return TRUE;
     }
 
-  if (handle != 0 &&
-    ring_properties_satisfy(properties,
+  if (ring_properties_satisfy(properties,
       ring_call_channel_fixed_properties(),
       ring_call_channel_allowed_properties)) {
     RingCallChannel *channel;
@@ -743,7 +693,6 @@ ring_media_requestotron(RingMediaManager *self,
 
     return ring_media_manager_outgoing_call(self, request,
       handle,
-      kind == METHOD_COMPATIBLE ? handle : 0,
       modem_call_get_emergency_service(priv->call_service, target_id),
       tp_asv_get_initial_audio(properties, FALSE));
   }
@@ -882,7 +831,6 @@ static gboolean
 ring_media_manager_outgoing_call(RingMediaManager *self,
   gpointer request,
   TpHandle target,
-  TpHandle initial_remote,
   char const *emergency,
   gboolean initial_audio)
 {
@@ -904,7 +852,7 @@ ring_media_manager_outgoing_call(RingMediaManager *self,
       "handle-type", htype,
       "handle", target,
       "peer", target,
-      "initial-remote", initial_remote,
+      "initial-remote", target,
       "requested", TRUE,
       "initial-audio", initial_audio,
       "anon-modes", priv->anon_modes,
