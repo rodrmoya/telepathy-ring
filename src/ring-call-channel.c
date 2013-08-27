@@ -114,8 +114,6 @@ struct _RingCallChannelPrivate
 
   unsigned :0;
 
-  unsigned call_state; /* Channel.Interface.CallState bits */
-
   struct {
     gulong emergency;
     gulong waiting, on_hold, forwarded;
@@ -169,7 +167,6 @@ enum
 
 static TpDBusPropertiesMixinIfaceImpl
 ring_call_channel_dbus_property_interfaces[];
-static void ring_channel_call_state_iface_init(gpointer, gpointer);
 static void ring_channel_hold_iface_init(gpointer, gpointer);
 static void ring_channel_splittable_iface_init(gpointer, gpointer);
 
@@ -191,8 +188,6 @@ G_DEFINE_TYPE_WITH_CODE(
   G_IMPLEMENT_INTERFACE(RING_TYPE_MEMBER_CHANNEL, NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
     tp_group_mixin_iface_init);
-  G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_CALL_STATE,
-    ring_channel_call_state_iface_init);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_SERVICE_POINT,
     NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_HOLD,
@@ -202,7 +197,6 @@ G_DEFINE_TYPE_WITH_CODE(
 
 const char *ring_call_channel_interfaces[] = {
   TP_IFACE_CHANNEL_INTERFACE_GROUP,
-  TP_IFACE_CHANNEL_INTERFACE_CALL_STATE,
   TP_IFACE_CHANNEL_INTERFACE_SERVICE_POINT,
   TP_IFACE_CHANNEL_INTERFACE_HOLD,
   RING_IFACE_CHANNEL_INTERFACE_SPLITTABLE,
@@ -1316,42 +1310,6 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
 }
 
 /* ---------------------------------------------------------------------- */
-/* Implement org.freedesktop.Telepathy.Channel.Interface.CallState */
-
-static
-void get_call_states(TpSvcChannelInterfaceCallState *iface,
-  DBusGMethodInvocation *context)
-{
-  RingCallChannel *self = RING_CALL_CHANNEL(iface);
-  RingCallChannelPrivate *priv = self->priv;
-  GHashTable *call_states;
-
-  call_states = g_hash_table_new (NULL, NULL);
-
-  if (priv->peer_handle) {
-    g_hash_table_replace (call_states,
-      GUINT_TO_POINTER (priv->peer_handle),
-      GUINT_TO_POINTER ((guint)priv->call_state));
-  }
-
-  tp_svc_channel_interface_call_state_return_from_get_call_states
-    (context, call_states);
-
-  g_hash_table_destroy (call_states);
-}
-
-static void
-ring_channel_call_state_iface_init(gpointer g_iface, gpointer iface_data)
-{
-  TpSvcChannelInterfaceCallStateClass *klass = g_iface;
-
-#define IMPLEMENT(x) tp_svc_channel_interface_call_state_implement_##x( \
-    klass, x)
-  IMPLEMENT(get_call_states);
-#undef IMPLEMENT
-}
-
-/* ---------------------------------------------------------------------- */
 /* Implement org.freedesktop.Telepathy.Channel.Interface.Hold */
 
 static int ring_update_hold (RingCallChannel *self, int hold, int reason);
@@ -1560,25 +1518,6 @@ ring_update_hold (RingCallChannel *self,
   return 0;
 }
 
-static void ring_update_call_state(RingCallChannel *self,
-  unsigned set_states,
-  unsigned zap_states)
-{
-  RingCallChannelPrivate *priv = RING_CALL_CHANNEL(self)->priv;
-  unsigned call_state, old_state = priv->call_state;
-
-  call_state = priv->call_state =
-    (old_state & ~zap_states) | set_states;
-
-  if (priv->peer_handle && call_state != old_state) {
-    DEBUG("emitting %s(%u, %u)",
-      "CallStateChanged", priv->peer_handle, call_state);
-    tp_svc_channel_interface_call_state_emit_call_state_changed(
-      TP_SVC_CHANNEL_INTERFACE_CALL_STATE(self),
-      priv->peer_handle, call_state);
-  }
-}
-
 static void
 on_modem_call_state(ModemCall *ci,
   ModemCallState state,
@@ -1594,10 +1533,13 @@ on_modem_call_on_hold(ModemCall *ci,
   gboolean onhold,
   RingCallChannel *self)
 {
+  /* TODO signal hold state */
+#if 0
   if (onhold)
     ring_update_call_state(self, TP_CHANNEL_CALL_STATE_HELD, 0);
   else
     ring_update_call_state(self, 0, TP_CHANNEL_CALL_STATE_HELD);
+#endif
 }
 
 /** This call has been forwarded */
@@ -1605,7 +1547,7 @@ static void
 on_modem_call_forwarded(ModemCall *ci,
   RingCallChannel *self)
 {
-  ring_update_call_state(self, TP_CHANNEL_CALL_STATE_FORWARDED, 0);
+  /* TODO signal forwarded */
 }
 
 static void
@@ -1642,7 +1584,7 @@ static void
 on_modem_call_waiting(ModemCall *ci,
   RingCallChannel *self)
 {
-  ring_update_call_state(self, TP_CHANNEL_CALL_STATE_QUEUED, 0);
+  /* TODO signal queued */
 }
 
 /* Invoked when MO call targets an emergency service */
@@ -1908,10 +1850,14 @@ static void on_modem_call_state_mo_alerting(RingCallChannel *self)
   RingCallChannelPrivate *priv = self->priv;
 
   ring_call_channel_remote_pending(self, priv->peer_handle, "Call alerting");
+  /* TODO signal ringing */
+
+#if 0
 
   ring_update_call_state(self,
     TP_CHANNEL_CALL_STATE_RINGING,
     TP_CHANNEL_CALL_STATE_QUEUED);
+#endif
 }
 
 static void on_modem_call_state_waiting(RingCallChannel *self)
@@ -1980,9 +1926,12 @@ static void on_modem_call_state_active(RingCallChannel *self)
       TP_CHANNEL_GROUP_FLAG_CAN_ADD);
   }
 
+/* TODO unsure we unset the flags */
+#if 0
   ring_update_call_state(self, 0,
     TP_CHANNEL_CALL_STATE_RINGING |
     TP_CHANNEL_CALL_STATE_QUEUED);
+#endif
 
   if (priv->dial2nd) {
     /* p equals 0b1100, 0xC, or "DTMF Control Digits Separator" in the 3GPP
@@ -2175,10 +2124,13 @@ ring_call_channel_released(RingCallChannel *self,
     return;
   self->priv->released = 1;
 
+/* TODO set to release */
+#if 0
   ring_update_call_state(self, 0,
     TP_CHANNEL_CALL_STATE_RINGING |
     TP_CHANNEL_CALL_STATE_QUEUED |
     TP_CHANNEL_CALL_STATE_HELD);
+#endif
 
   /* update flags accordingly -- deny adding/removal/rescind */
   tp_group_mixin_change_flags((GObject *)self, 0,
