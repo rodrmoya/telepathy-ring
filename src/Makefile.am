@@ -41,10 +41,8 @@ test_ring_LDADD = \
 # Rules for building the targets
 
 libtpring_la_SOURCES = \
-    base-call-channel.h base-call-channel.c \
     ring-call-content.h ring-call-content.c \
     ring-call-stream.h ring-call-stream.c \
-    ring-call-member.h ring-call-member.c \
     ring-connection-manager.h ring-connection-manager.c \
     ring-protocol.h ring-protocol.c \
     ring-connection.h ring-connection.c \

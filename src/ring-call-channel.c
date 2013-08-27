@@ -40,6 +40,7 @@
 
 #include "ring-call-channel.h"
 #include "ring-member-channel.h"
+#include "ring-call-content.h"
 #include "ring-emergency-service.h"
 
 #include "ring-util.h"
@@ -87,6 +88,7 @@ struct _RingCallChannelPrivate
   char *initial_emergency_service;
 
   TpHandle peer_handle, initial_remote;
+  TpCallMemberFlags peer_flags;
 
   char *accepted;
 
@@ -178,13 +180,17 @@ static gboolean ring_call_channel_remove_member_with_reason(
   GError **error);
 static gboolean ring_call_channel_accept_pending(
   GObject *, TpHandle handle, const char *message, GError **error);
+static void ring_call_channel_add_content (
+  RingCallChannel *self, const gchar *name,
+  TpCallContentDisposition disposition);
+
 static gboolean ring_call_channel_request_remote(
   GObject *, TpHandle handle, const char *message, GError **error);
 static gboolean ring_call_channel_remote_pending(
   RingCallChannel *, TpHandle handle, const char *message);
 
 G_DEFINE_TYPE_WITH_CODE(
-  RingCallChannel, ring_call_channel, RING_TYPE_BASE_CALL_CHANNEL,
+  RingCallChannel, ring_call_channel, TP_TYPE_BASE_CALL_CHANNEL,
   G_IMPLEMENT_INTERFACE(RING_TYPE_MEMBER_CHANNEL, NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
     tp_group_mixin_iface_init);
@@ -283,8 +289,10 @@ ring_call_channel_constructed(GObject *object)
     tp_base_connection_get_handles(connection, TP_HANDLE_TYPE_CONTACT),
     self_handle);
 
+
   if (tp_base_call_channel_has_initial_audio(TP_BASE_CALL_CHANNEL(self), NULL)) {
-    ring_base_call_channel_add_content(RING_BASE_CALL_CHANNEL(self), "InitialAudio", TP_CALL_CONTENT_DISPOSITION_INITIAL);
+    ring_call_channel_add_content(self,
+      "Audio", TP_CALL_CONTENT_DISPOSITION_INITIAL);
   }
 
   tp_base_channel_register(base);
@@ -424,7 +432,6 @@ ring_call_channel_set_property(GObject *obj,
 {
   RingCallChannel *self = RING_CALL_CHANNEL(obj);
   RingCallChannelPrivate *priv = self->priv;
-  TpBaseChannel *base = TP_BASE_CHANNEL (self);
 
   switch (property_id) {
     case PROP_ANON_MODES:
@@ -440,11 +447,7 @@ ring_call_channel_set_property(GObject *obj,
       priv->initial_emergency_service = g_value_dup_string(value);
       break;
     case PROP_PEER:
-      if (priv->peer_handle == 0) {
-        if (tp_base_channel_get_target_handle (base) == 0 ||
-            tp_base_channel_get_target_handle (base) == g_value_get_uint(value))
-          priv->peer_handle = g_value_get_uint(value);
-      }
+      priv->peer_handle = g_value_get_uint(value);
       break;
     case PROP_INITIAL_REMOTE:
       priv->initial_remote = g_value_get_uint(value);
@@ -580,20 +583,59 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
   }
 }
 
-static TpBaseCallContent *
-ring_call_channel_add_content (TpBaseCallChannel *self,
-  const gchar *name,
-  TpMediaStreamType media,
-  TpMediaStreamDirection initial_direction,
-  GError **error)
+static void
+ring_call_channel_hangup (TpBaseCallChannel *base,
+    guint reason,
+    const gchar *detailed_reason,
+    const gchar *message)
 {
-  if (media != TP_MEDIA_STREAM_TYPE_AUDIO) {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "invalid stream type %d", media);
-    return NULL;
-  }
 
-  return (TpBaseCallContent *) ring_base_call_channel_add_content(RING_BASE_CALL_CHANNEL(self), name, TP_CALL_CONTENT_DISPOSITION_INITIAL);
+  DEBUG ("Hanging up channel");
+  /* TODO hangup properly */
+  if (TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
+      != NULL)
+    TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
+      ( base, reason, detailed_reason, message);
+}
+
+static gchar *
+ring_call_channel_get_object_path_suffix (TpBaseChannel *base)
+{
+  return g_strdup_printf ("CallChannel%p", base);
+}
+
+
+static void
+ring_call_channel_add_content (RingCallChannel *self,
+  const gchar *name,
+  TpCallContentDisposition disposition)
+{
+  TpBaseChannel *base = TP_BASE_CHANNEL (self);
+  gchar *object_path;
+  TpBaseCallContent *content;
+  gchar *escaped;
+
+  /* FIXME could clash when other party in a one-to-one call creates a stream
+   * with the same media type and name */
+  escaped = tp_escape_as_identifier (name);
+  object_path = g_strdup_printf ("%s/Content_%s",
+      tp_base_channel_get_object_path (base),
+      escaped);
+  g_free (escaped);
+
+  content = g_object_new (RING_TYPE_CALL_CONTENT,
+    "connection", tp_base_channel_get_connection (base),
+    "object-path", object_path,
+    "disposition", disposition,
+    "name", name,
+    NULL);
+
+  g_free (object_path);
+
+  tp_base_call_channel_add_content (TP_BASE_CALL_CHANNEL (self),
+    content);
+
+  ring_call_content_add_stream(RING_CALL_CONTENT(content));
 }
 
 
@@ -619,9 +661,10 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
   base_chan_class->get_interfaces = ring_call_channel_get_interfaces;
   base_chan_class->close = ring_call_channel_close;
   base_chan_class->fill_immutable_properties = ring_call_channel_fill_immutable_properties;
+  base_chan_class->get_object_path_suffix = ring_call_channel_get_object_path_suffix;
 
   base_call_class->accept = ring_call_channel_accept;
-  base_call_class->add_content = ring_call_channel_add_content;
+  base_call_class->hangup = ring_call_channel_hangup;
 
   klass->dbus_properties_class.interfaces =
     ring_call_channel_dbus_property_interfaces;
@@ -833,6 +876,8 @@ ring_call_channel_close(TpBaseChannel *_self)
   RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = RING_CALL_CHANNEL(self)->priv;
 
+  DEBUG ("Closing channel");
+
   priv->closing = 1;
 
   if (priv->playing)
@@ -870,7 +915,7 @@ ring_call_channel_close(TpBaseChannel *_self)
     g_object_unref(self);
   }
 
-  tp_base_channel_destroyed (_self);
+  TP_BASE_CHANNEL_CLASS (ring_call_channel_parent_class)->close (_self);
 }
 
 /* ---------------------------------------------------------------------- */

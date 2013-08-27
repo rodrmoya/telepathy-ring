@@ -22,7 +22,7 @@
 #include "config.h"
 
 #include "ring-member-channel.h"
-#include "base-call-channel.h"
+#include "ring-call-channel.h"
 
 #include <telepathy-glib/gtypes.h>
 #include <telepathy-glib/util.h>
@@ -78,8 +78,6 @@ ring_member_channel_get_type(void)
 
     type = g_type_register_static(
       G_TYPE_INTERFACE, "RingMemberChannel", &info, 0);
-
-    g_type_interface_add_prerequisite(type, RING_TYPE_BASE_CALL_CHANNEL);
   }
 
   return type;
