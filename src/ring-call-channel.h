@@ -41,13 +41,11 @@ G_BEGIN_DECLS
 
 struct _RingCallChannelClass {
   TpBaseCallChannelClass base_class;
-  TpGroupMixinClass group_class;
   TpDBusPropertiesMixinClass dbus_properties_class;
 };
 
 struct _RingCallChannel {
   TpBaseCallChannel base;
-  TpGroupMixin group;
   ModemCall *call_instance;
   char *nick;
   RingCallChannelPrivate *priv;
@@ -79,8 +77,6 @@ void ring_call_channel_initial_audio(RingCallChannel *self,
 
 void ring_call_channel_update_state(RingCallChannel *self,
   guint state, guint causetype, guint cause);
-
-void ring_call_channel_emit_initial(RingCallChannel *self);
 
 G_END_DECLS
 

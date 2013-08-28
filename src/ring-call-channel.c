@@ -108,7 +108,7 @@ struct _RingCallChannelPrivate
 
   uint8_t state;
 
-  unsigned constructed:1, released:1, closing:1, disposed:1;
+  unsigned constructed:1, released:1, shutting_down:1, disposed:1;
 
   unsigned call_instance_seen:1;
 
@@ -172,28 +172,15 @@ ring_call_channel_dbus_property_interfaces[];
 static void ring_channel_hold_iface_init(gpointer, gpointer);
 static void ring_channel_splittable_iface_init(gpointer, gpointer);
 
-static gboolean ring_call_channel_add_member(
-  GObject *obj, TpHandle handle, const char *message, GError **error);
-static gboolean ring_call_channel_remove_member_with_reason(
-  GObject *obj, TpHandle handle, const char *message,
-  guint reason,
-  GError **error);
-static gboolean ring_call_channel_accept_pending(
-  GObject *, TpHandle handle, const char *message, GError **error);
 static void ring_call_channel_add_content (
   RingCallChannel *self, const gchar *name,
   TpCallContentDisposition disposition);
-
-static gboolean ring_call_channel_request_remote(
-  GObject *, TpHandle handle, const char *message, GError **error);
-static gboolean ring_call_channel_remote_pending(
-  RingCallChannel *, TpHandle handle, const char *message);
+static ModemRequest *ring_call_channel_create(RingCallChannel *,
+  GError **error);
 
 G_DEFINE_TYPE_WITH_CODE(
   RingCallChannel, ring_call_channel, TP_TYPE_BASE_CALL_CHANNEL,
   G_IMPLEMENT_INTERFACE(RING_TYPE_MEMBER_CHANNEL, NULL);
-  G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
-    tp_group_mixin_iface_init);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_SERVICE_POINT,
     NULL);
   G_IMPLEMENT_INTERFACE(TP_TYPE_SVC_CHANNEL_INTERFACE_HOLD,
@@ -202,7 +189,6 @@ G_DEFINE_TYPE_WITH_CODE(
     ring_channel_splittable_iface_init));
 
 const char *ring_call_channel_interfaces[] = {
-  TP_IFACE_CHANNEL_INTERFACE_GROUP,
   TP_IFACE_CHANNEL_INTERFACE_SERVICE_POINT,
   TP_IFACE_CHANNEL_INTERFACE_HOLD,
   RING_IFACE_CHANNEL_INTERFACE_SPLITTABLE,
@@ -215,16 +201,10 @@ static void ring_call_channel_fill_immutable_properties(TpBaseChannel *base,
 static void ring_call_channel_play_error_tone(RingCallChannel *self,
   guint state, guint causetype, guint cause);
 static void ring_call_channel_close(TpBaseChannel *self);
+static void ring_call_channel_hangup(TpBaseCallChannel *self, guint reason,
+  const gchar *detailed_reason, const gchar *message);
 static void ring_call_channel_set_call_instance(RingCallChannel *_self,
   ModemCall *ci);
-static gboolean ring_call_channel_validate_media_handle (gpointer _self,
-  guint *handle,
-  GError **);
-static gboolean ring_call_channel_create_streams (gpointer _self,
-  TpHandle handle,
-  gboolean audio,
-  gboolean video,
-  GError **);
 
 static ModemCallService *ring_call_channel_get_call_service (RingCallChannel *self);
 static guint ring_call_channel_get_member_handle(RingCallChannel *self);
@@ -271,87 +251,24 @@ ring_call_channel_constructed(GObject *object)
   RingCallChannel *self = RING_CALL_CHANNEL(object);
   RingCallChannelPrivate *priv = self->priv;
   TpBaseChannel *base = TP_BASE_CHANNEL (self);
-  TpBaseConnection *connection = tp_base_channel_get_connection (base);
-  TpHandle self_handle;
 
   if (G_OBJECT_CLASS(ring_call_channel_parent_class)->constructed)
     G_OBJECT_CLASS(ring_call_channel_parent_class)->constructed(object);
 
-  if (priv->peer_handle != 0)
-    g_assert(priv->peer_handle == tp_base_channel_get_target_handle (base));
+  g_assert (priv->peer_handle == tp_base_channel_get_target_handle (base));
+  g_assert (tp_base_call_channel_has_initial_audio(
+    TP_BASE_CALL_CHANNEL (self), NULL));
 
-  self_handle = tp_base_connection_get_self_handle(connection);
+  tp_base_call_channel_update_member_flags (TP_BASE_CALL_CHANNEL (object),
+    priv->peer_handle, priv->peer_flags,
+    0, TP_CALL_STATE_CHANGE_REASON_PROGRESS_MADE, "", "");
 
-  priv->requests = g_queue_new();
-
-  tp_group_mixin_init(
-    object, G_STRUCT_OFFSET(RingCallChannel, group),
-    tp_base_connection_get_handles(connection, TP_HANDLE_TYPE_CONTACT),
-    self_handle);
-
-
-  if (tp_base_call_channel_has_initial_audio(TP_BASE_CALL_CHANNEL(self), NULL)) {
-    ring_call_channel_add_content(self,
+  ring_call_channel_add_content(self,
       "Audio", TP_CALL_CONTENT_DISPOSITION_INITIAL);
-  }
 
   tp_base_channel_register(base);
 
   priv->constructed = 1;
-}
-
-void
-ring_call_channel_emit_initial(RingCallChannel *self)
-{
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
-  RingCallChannelPrivate *priv = self->priv;
-  TpBaseChannel *base = TP_BASE_CHANNEL (self);
-  TpHandle self_handle = mixin->self_handle;
-  TpIntSet *member_set = tp_intset_new();
-  TpIntSet *local_pending_set = NULL, *remote_pending_set = NULL;
-  char const *message = "";
-  TpChannelGroupChangeReason reason = 0;
-  TpChannelGroupFlags add = 0, del = 0;
-
-  tp_intset_add(member_set, tp_base_channel_get_initiator (base));
-
-  if (!tp_base_channel_is_requested (base)) {
-    /* Incoming call */
-    message = "Channel created for incoming call";
-    reason = TP_CHANNEL_GROUP_CHANGE_REASON_INVITED;
-    local_pending_set = tp_intset_new();
-    tp_intset_add(local_pending_set, self_handle);
-  }
-  else if (priv->initial_remote) {
-    /* Outgoing call */
-    message = "Channel created for outgoing call";
-    reason = TP_CHANNEL_GROUP_CHANGE_REASON_INVITED;
-    remote_pending_set = tp_intset_new();
-    tp_intset_add(remote_pending_set, priv->initial_remote);
-    add |= TP_CHANNEL_GROUP_FLAG_CAN_RESCIND;
-  }
-  else {
-    /* Outgoing call, but without handle */
-    message = "Channel created";
-    reason = TP_CHANNEL_GROUP_CHANGE_REASON_NONE;
-    if (tp_base_channel_get_target_handle (base) == 0)
-      add |= TP_CHANNEL_GROUP_FLAG_CAN_ADD;
-  }
-
-  add |= TP_CHANNEL_GROUP_FLAG_PROPERTIES;
-  add |= TP_CHANNEL_GROUP_FLAG_MEMBERS_CHANGED_DETAILED;
-  add |= TP_CHANNEL_GROUP_FLAG_CAN_REMOVE;
-
-  tp_group_mixin_change_flags(G_OBJECT(self), add, del);
-
-  tp_group_mixin_change_members(G_OBJECT(self), message,
-    member_set, NULL,
-    local_pending_set, remote_pending_set,
-    tp_base_channel_get_initiator (base), reason);
-
-  tp_intset_destroy(member_set);
-  if (local_pending_set) tp_intset_destroy(local_pending_set);
-  if (remote_pending_set) tp_intset_destroy(remote_pending_set);
 }
 
 static void
@@ -533,19 +450,9 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
   guint state = 0;
   RingCallChannel *self = RING_CALL_CHANNEL (_self);
 
-  if (self->call_instance == NULL) {
-    g_warning("Missing call instance");
-    return;
-  }
-
-  g_object_get (self->call_instance, "state", &state, NULL);
-  if (state == MODEM_CALL_STATE_DISCONNECTED) {
-    g_warning("Invalid call state");
-    return;
-  }
-
   if (tp_base_channel_is_requested (TP_BASE_CHANNEL (self))) {
     char const *destination;
+    GError *error = NULL;
     TpHandle handle = tp_base_channel_get_target_handle(TP_BASE_CHANNEL(_self));
 
     DEBUG("sending outgoing call");
@@ -554,26 +461,37 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
       RING_CONNECTION(tp_base_channel_get_connection (TP_BASE_CHANNEL (_self))),
       handle);
 
-    DEBUG("Trying to add %u=\"%s\" to remote pending", handle, destination);
-
-    g_assert(handle != 0);
-
+    DEBUG("Trying to start call to %u=\"%s\"", handle, destination);
     if (!modem_call_is_valid_address(destination)) {
-      g_warning("Invalid handle for call channel: %s", destination);
+      tp_base_call_channel_set_state (TP_BASE_CALL_CHANNEL (self),
+        TP_CALL_STATE_ENDED,
+        0, TP_CALL_STATE_CHANGE_REASON_INVALID_CONTACT,
+        TP_ERROR_STR_INVALID_HANDLE, "Invalid destination");
       return;
     }
 
-    g_object_set(self, "peer", handle, NULL);
-
-    if (handle == self->priv->peer_handle) {
-      ring_call_channel_remote_pending(self, handle, "Remote accepted");
-    } else {
-      g_warning("Only one target allowed for call channel");
-      return;
+    if (ring_call_channel_create (self, &error) == NULL) {
+      /* Only errors if the contact was invalid */
+      tp_base_call_channel_set_state (TP_BASE_CALL_CHANNEL (self),
+        TP_CALL_STATE_ENDED,
+        0, TP_CALL_STATE_CHANGE_REASON_INVALID_CONTACT,
+        TP_ERROR_STR_INVALID_HANDLE, error->message);
+      g_error_free (error);
     }
 
   } else {
     DEBUG("accepting incoming call");
+
+    if (self->call_instance == NULL) {
+      g_warning("Missing call instance");
+      return;
+    }
+
+    g_object_get (self->call_instance, "state", &state, NULL);
+    if (state == MODEM_CALL_STATE_DISCONNECTED) {
+      g_warning("Invalid call state");
+      return;
+    }
 
     if (!self->priv->accepted)
       self->priv->accepted = g_strdup("Call accepted");
@@ -581,21 +499,6 @@ ring_call_channel_accept (TpBaseCallChannel *_self)
     modem_call_request_answer(self->call_instance, reply_to_answer,
         g_strdup(self->nick));
   }
-}
-
-static void
-ring_call_channel_hangup (TpBaseCallChannel *base,
-    guint reason,
-    const gchar *detailed_reason,
-    const gchar *message)
-{
-
-  DEBUG ("Hanging up channel");
-  /* TODO hangup properly */
-  if (TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
-      != NULL)
-    TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
-      ( base, reason, detailed_reason, message);
 }
 
 static gchar *
@@ -671,14 +574,6 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
   tp_dbus_properties_mixin_class_init(object_class,
     G_STRUCT_OFFSET(RingCallChannelClass, dbus_properties_class));
   tp_group_mixin_init_dbus_properties(object_class);
-
-  tp_group_mixin_class_init(
-    object_class,
-    G_STRUCT_OFFSET(RingCallChannelClass, group_class),
-    ring_call_channel_add_member,
-    NULL);
-  tp_group_mixin_class_set_remove_with_reason_func(
-    object_class, ring_call_channel_remove_member_with_reason);
 
   g_object_class_install_property(
     object_class, PROP_ANON_MODES, ring_param_spec_anon_modes());
@@ -849,8 +744,6 @@ ring_call_channel_fill_immutable_properties(TpBaseChannel *base,
 /* ====================================================================== */
 /* RingMediaChannel implementation */
 
-static ModemRequest *ring_call_channel_create(RingCallChannel *, GError **error);
-
 ModemRequest *
 ring_call_channel_queue_request (RingCallChannel *self,
   ModemRequest *request)
@@ -869,16 +762,15 @@ ring_call_channel_dequeue_request(RingCallChannel *self,
   return request;
 }
 
-/** Close channel */
+/* Shutdown modem */
 static void
-ring_call_channel_close(TpBaseChannel *_self)
+ring_call_channel_shutdown_modem(RingCallChannel *self, const gchar *message)
 {
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
   RingCallChannelPrivate *priv = RING_CALL_CHANNEL(self)->priv;
 
-  DEBUG ("Closing channel");
+  DEBUG ("Shutting down the modem call");
 
-  priv->closing = 1;
+  priv->shutting_down = 1;
 
   if (priv->playing)
     modem_tones_stop(priv->tones, priv->playing);
@@ -889,7 +781,7 @@ ring_call_channel_close(TpBaseChannel *_self)
 
     ring_conference_channel_emit_channel_removed(
       priv->member.conference, RING_MEMBER_CHANNEL(self),
-      "Member channel closed",
+      message,
       actor, reason);
 
     /* above emit calls ring_member_channel_left() */
@@ -906,7 +798,7 @@ ring_call_channel_close(TpBaseChannel *_self)
 
   if (self->call_instance) {
     if (!priv->release.message)
-      priv->release.message = g_strdup("Channel closed");
+      priv->release.message = g_strdup(message);
     modem_call_request_release(self->call_instance, NULL, NULL);
   }
   else if (priv->creating_call) {
@@ -914,6 +806,33 @@ ring_call_channel_close(TpBaseChannel *_self)
     priv->creating_call = NULL;
     g_object_unref(self);
   }
+}
+
+/** Hangup **/
+static void
+ring_call_channel_hangup (TpBaseCallChannel *base,
+    guint reason,
+    const gchar *detailed_reason,
+    const gchar *message)
+{
+  RingCallChannel *self = RING_CALL_CHANNEL (base);
+
+  DEBUG ("Hanging up channel");
+  ring_call_channel_shutdown_modem (self, message);
+
+  if (TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
+      != NULL)
+    TP_BASE_CALL_CHANNEL_CLASS (ring_call_channel_parent_class)->hangup
+      ( base, reason, detailed_reason, message);
+}
+
+
+/** Close channel */
+static void
+ring_call_channel_close(TpBaseChannel *_self)
+{
+  RingCallChannel *self = RING_CALL_CHANNEL (_self);
+  ring_call_channel_shutdown_modem (self, "Channel closed");
 
   TP_BASE_CHANNEL_CLASS (ring_call_channel_parent_class)->close (_self);
 }
@@ -948,7 +867,7 @@ ring_call_channel_play_tone(RingCallChannel *self,
 {
   RingCallChannelPrivate *priv = self->priv;
 
-  if (priv->closing)
+  if (priv->shutting_down)
     return;
 
   if (1)
@@ -1034,16 +953,6 @@ ring_call_channel_play_error_tone(RingCallChannel *self,
 
   event_tone = modem_call_event_tone(state, causetype, cause);
 
-#if nomore
-  if (state == MODEM_CALL_STATE_MT_RELEASE &&
-    event_tone != TONES_STOP && event_tone != TONES_NONE) {
-    TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
-    if (tp_handle_set_size(mixin->local_pending))
-      /* Case remote end drops call before it is accepted */
-      event_tone = TONES_NONE;
-  }
-#endif
-
   hold = TP_LOCAL_HOLD_STATE_UNHELD;
   g_object_get(self, "hold-state", &hold, NULL);
 
@@ -1110,130 +1019,11 @@ ring_call_channel_set_call_instance(RingCallChannel *self,
     ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
-G_GNUC_UNUSED static gboolean
-ring_call_channel_validate_media_handle (gpointer _self,
-                                         guint *handlep,
-                                         GError **error)
-{
-  DEBUG("enter");
-
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
-  TpBaseChannel *base = TP_BASE_CHANNEL (self);
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
-  TpHandleRepoIface *repo;
-  RingCallChannelPrivate *priv = self->priv;
-
-  guint handle = *handlep;
-
-  /* generic checks */
-  if (handle == 0)
-    handle = priv->peer_handle;
-  if (handle == 0)
-    handle = tp_base_channel_get_target_handle (base);
-
-  repo = tp_base_connection_get_handles(
-    tp_base_channel_get_connection(base), TP_HANDLE_TYPE_CONTACT);
-
-  if (!tp_handle_is_valid(repo, handle, error))
-    return FALSE;
-
-  if (handle == mixin->self_handle) {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "cannot establish call streams with yourself");
-    return FALSE;
-  }
-
-  if (!modem_call_is_valid_address(tp_handle_inspect(repo, handle))) {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "Invalid handle %u=\"%s\" for media streams",
-      handle, tp_handle_inspect(repo, handle));
-    return FALSE;
-  }
-
-  if (!tp_handle_set_is_member(self->group.members, handle) &&
-    !tp_handle_set_is_member(self->group.remote_pending, handle) &&
-    handle != tp_base_channel_get_target_handle (base)) {
-    g_set_error(error,
-      TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "given handle %u is not a member of the channel",
-      handle);
-    return FALSE;
-  }
-
-  *handlep = handle;
-  return TRUE;
-}
-
 static void reply_to_modem_call_request_dial(ModemCallService *_service,
   ModemRequest *request,
   ModemCall *instance,
   GError *error,
   gpointer _channel);
-
-G_GNUC_UNUSED static gboolean
-ring_call_channel_create_streams (gpointer _self,
-  TpHandle handle,
-  gboolean audio,
-  gboolean video,
-  GError **error)
-{
-  RingCallChannel *self = RING_CALL_CHANNEL(_self);
-  RingCallChannelPrivate *priv = self->priv;
-  ModemCallService *call_service = ring_call_channel_get_call_service (_self);
-
-  (void)audio; (void)video;
-
-  if (priv->peer_handle == 0)
-    g_object_set(self, "peer", handle, NULL);
-
-  if (handle != priv->peer_handle) {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT, "Invalid handle");
-    return FALSE;
-  }
-
-  if (call_service == NULL)
-    {
-      g_set_error (error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
-          "Modem does not support voice calls");
-      return FALSE;
-    }
-
-  if (priv->call_instance_seen) {
-    DEBUG("Already associated with a call");
-    return TRUE;
-  }
-
-  priv->call_instance_seen = 1;
-
-  return ring_call_channel_create(self, error) != NULL;
-}
-
-void
-ring_call_channel_initial_audio(RingCallChannel *self,
-  RingMediaManager *manager,
-  gpointer channelrequest)
-{
-  ModemRequest *request;
-  GError *error = NULL;
-
-  DEBUG("%s(%p, %p, %p) called", __func__, self, manager, channelrequest);
-
-  self->priv->call_instance_seen = 1;
-
-  request = ring_call_channel_create(self, &error);
-
-  if (request) {
-    modem_request_add_qdatas(
-      request,
-      g_quark_from_static_string("RingChannelRequest"), channelrequest, NULL,
-      g_type_qname(RING_TYPE_MEDIA_MANAGER), g_object_ref(manager), g_object_unref,
-      NULL);
-  }
-  else {
-    ring_media_manager_emit_new_channel(manager, channelrequest, self, error);
-    g_error_free(error);
-  }
-}
 
 static ModemRequest *
 ring_call_channel_create(RingCallChannel *self, GError **error)
@@ -1293,30 +1083,13 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
 {
   RingCallChannel *self = RING_CALL_CHANNEL(_channel);
   RingCallChannelPrivate *priv = self->priv;
-  TpBaseChannel *base = TP_BASE_CHANNEL (self);
   GError *error0 = NULL;
   TpChannelGroupChangeReason reason;
   char *debug;
-  gpointer channelrequest;
 
   if (request == priv->creating_call) {
     priv->creating_call = NULL;
     g_object_unref(self);
-  }
-
-  channelrequest = modem_request_steal_data(request, "RingChannelRequest");
-
-  if (channelrequest) {
-    RingMediaManager *manager;
-
-    manager = modem_request_get_qdata(request, g_type_qname(RING_TYPE_MEDIA_MANAGER));
-
-    if (ci)
-      g_object_set(self,
-          "initial-remote", tp_base_channel_get_target_handle (base),
-          NULL);
-
-    ring_media_manager_emit_new_channel(manager, channelrequest, self, NULL);
   }
 
   if (ci) {
@@ -1349,9 +1122,6 @@ reply_to_modem_call_request_dial(ModemCallService *_service,
   if (error0)
     g_error_free(error0);
   g_free(debug);
-
-  if (!priv->playing)
-    ring_call_channel_close(TP_BASE_CHANNEL(self));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1568,8 +1338,29 @@ on_modem_call_state(ModemCall *ci,
   ModemCallState state,
   RingCallChannel *self)
 {
+  /* Eh */
   ring_call_channel_update_state(
     RING_CALL_CHANNEL(self), state, 0, 0);
+}
+
+static void
+ring_call_channel_set_peer_flags (RingCallChannel *self,
+   TpCallMemberFlags flag, gboolean set)
+{
+  RingCallChannelPrivate *priv = self->priv;
+  TpCallMemberFlags flags = priv->peer_flags;
+
+  if (set)
+    flags |= flag;
+  else
+    flags &= ~flag;
+
+  if (flags == priv->peer_flags)
+    return;
+
+  tp_base_call_channel_update_member_flags (TP_BASE_CALL_CHANNEL (self),
+    priv->peer_handle, priv->peer_flags,
+    priv->peer_handle, TP_CALL_STATE_CHANGE_REASON_USER_REQUESTED, "", "");
 }
 
 /** Remote end has put us on hold */
@@ -1578,13 +1369,8 @@ on_modem_call_on_hold(ModemCall *ci,
   gboolean onhold,
   RingCallChannel *self)
 {
-  /* TODO signal hold state */
-#if 0
-  if (onhold)
-    ring_update_call_state(self, TP_CHANNEL_CALL_STATE_HELD, 0);
-  else
-    ring_update_call_state(self, 0, TP_CHANNEL_CALL_STATE_HELD);
-#endif
+  ring_call_channel_set_peer_flags (self, TP_CALL_MEMBER_FLAG_HELD,
+    onhold);
 }
 
 /** This call has been forwarded */
@@ -1659,176 +1445,6 @@ on_modem_call_emergency(ModemCall *ci,
 }
 
 /* ---------------------------------------------------------------------- */
-
-/**
- * Interface Telepathy.Channel.Interface.Group (version 0.15)
- * using TpGroupMixin from telepathy-glib
- *
- * Methods:
- *   AddMembers ( au: contacts, s: message ) -> nothing
- *   GetAllMembers ( ) -> au, au, au
- *   GetGroupFlags ( ) -> u
- *   GetHandleOwners ( au: handles ) -> au
- *   GetLocalPendingMembers ( ) -> au
- *   GetLocalPendingMembersWithInfo ( ) -> a(uuus)
- *   GetMembers ( ) -> au
- *   GetRemotePendingMembers ( ) -> au
- *   GetSelfHandle ( ) -> u
- *   RemoveMembers ( au: contacts, s: message ) -> nothing
- * Signals:
- *    -> GroupFlagsChanged ( u: added, u: removed )
- *    -> MembersChanged ( s: message, au: added, au: removed,
- *                        au: local_pending, au: remote_pending,
- *                        u: actor, u: reason )
- *
- * TPGroupMixin interface:
- * ring_call_channel_add_member()
- * ring_call_channel_remove_member_with_reason()
- */
-
-
-static gboolean
-ring_call_channel_add_member(GObject *iface,
-  TpHandle handle,
-  const char *message,
-  GError **error)
-{
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(iface);
-
-  DEBUG("enter");
-
-  if (tp_handle_set_is_member(mixin->members, handle))
-    return TRUE;
-  else if (tp_handle_set_is_member(mixin->local_pending, handle))
-    /* Incoming call */
-    return ring_call_channel_accept_pending(iface, handle, message, error);
-  else
-    /* Outgoing call */
-    return ring_call_channel_request_remote(iface, handle, message, error);
-}
-
-
-static gboolean
-ring_call_channel_remove_member_with_reason(GObject *iface,
-  TpHandle handle,
-  const char *message,
-  guint reason,
-  GError **error)
-{
-  RingCallChannel *self = RING_CALL_CHANNEL(iface);
-  RingCallChannelPrivate *priv = self->priv;
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(iface);
-  TpIntSet *set;
-
-  DEBUG("enter");
-
-  if (handle != mixin->self_handle && handle != priv->peer_handle) {
-    g_set_error(error, TP_ERROR, TP_ERROR_PERMISSION_DENIED,
-      "handle %u cannot be removed", handle);
-    return FALSE;
-  }
-
-  if (priv->release.message)    /* Already releasing */
-    return FALSE;
-
-  tp_group_mixin_change_flags(iface,
-    0,
-    TP_CHANNEL_GROUP_FLAG_CAN_REMOVE |
-    TP_CHANNEL_GROUP_FLAG_CAN_RESCIND);
-
-  if (self->call_instance) {
-    priv->release.message = g_strdup(message ? message : "Call released");
-    priv->release.actor = mixin->self_handle;
-    priv->release.reason = reason;
-    modem_call_request_release(self->call_instance, NULL, NULL);
-  }
-  else {
-    /* Remove handle from set */
-    set = tp_intset_new ();
-    tp_intset_add(set, handle);
-    tp_group_mixin_change_members(iface, message, NULL, set, NULL, NULL,
-      mixin->self_handle, reason);
-    tp_intset_destroy(set);
-    ring_call_channel_close(TP_BASE_CHANNEL(self));
-  }
-
-  return TRUE;
-}
-
-/* Add handle to 'remote pending' set */
-gboolean
-ring_call_channel_request_remote(GObject *iface,
-  TpHandle handle,
-  const char *message,
-  GError **error)
-{
-  RingCallChannel *self = RING_CALL_CHANNEL(iface);
-  char const *destination;
-
-  destination = ring_connection_inspect_contact(
-    RING_CONNECTION(tp_base_channel_get_connection(TP_BASE_CHANNEL(self))),
-    handle);
-
-  DEBUG("Trying to add %u=\"%s\" to remote pending", handle, destination);
-
-  g_assert(handle != 0);
-
-  if (!modem_call_is_valid_address(destination)) {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "Invalid handle for media channel");
-    return FALSE;
-  }
-
-  g_object_set(self, "peer", handle, NULL);
-
-  if (handle == self->priv->peer_handle) {
-    ring_call_channel_remote_pending(self, handle, message);
-    return TRUE;
-  }
-  else {
-    g_set_error(error, TP_ERROR, TP_ERROR_INVALID_ARGUMENT,
-      "Only one target allowed for media channel");
-    return FALSE;
-  }
-}
-
-gboolean
-ring_call_channel_remote_pending(RingCallChannel *self,
-  TpHandle handle,
-  const char *message)
-{
-  RingCallChannelPrivate *priv = self->priv;
-  GObject *object = G_OBJECT(self);
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
-  TpIntSet *remote_pending_set;
-  gboolean done;
-
-  g_assert(handle == priv->peer_handle);
-
-  if (handle == 0)
-    return FALSE;
-  if (tp_handle_set_is_member(mixin->remote_pending, handle))
-    return TRUE;
-
-  remote_pending_set = tp_intset_new();
-  tp_intset_add(remote_pending_set, handle);
-
-  done = tp_group_mixin_change_members(object, message,
-         NULL, NULL, NULL, remote_pending_set,
-         mixin->self_handle,
-         TP_CHANNEL_GROUP_CHANGE_REASON_INVITED);
-
-  tp_intset_destroy(remote_pending_set);
-
-  if (done) {
-    tp_group_mixin_change_flags(object,
-      TP_CHANNEL_GROUP_FLAG_CAN_REMOVE |
-      TP_CHANNEL_GROUP_FLAG_CAN_RESCIND,
-      TP_CHANNEL_GROUP_FLAG_CAN_ADD);
-  }
-  return done;
-}
-
 void
 reply_to_answer (ModemCall *call_instance,
                  ModemRequest *request,
@@ -1838,40 +1454,6 @@ reply_to_answer (ModemCall *call_instance,
   DEBUG ("%s: %s", (char *)user_data, error ? error->message : "ok");
 
   g_free (user_data);
-}
-
-gboolean
-ring_call_channel_accept_pending(GObject *iface,
-  TpHandle handle,
-  const char *message,
-  GError **error)
-{
-  RingCallChannel *self = RING_CALL_CHANNEL(iface);
-  guint state = 0;
-
-  DEBUG("accepting an incoming call");
-
-  if (self->call_instance == NULL) {
-    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
-      "Missing call instance");
-    return FALSE;
-  }
-
-  g_object_get(self->call_instance, "state", &state, NULL);
-
-  if (state == MODEM_CALL_STATE_DISCONNECTED) {
-    g_set_error(error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
-      "Invalid call state");
-    return FALSE;
-  }
-
-  if (!self->priv->accepted)
-    self->priv->accepted = g_strdup(message ? message : "Call accepted");
-
-  modem_call_request_answer(self->call_instance, reply_to_answer,
-      g_strdup(self->nick));
-
-  return TRUE;
 }
 
 static void on_modem_call_state_incoming(RingCallChannel *self)
@@ -1886,23 +1468,11 @@ static void on_modem_call_state_dialing(RingCallChannel *self)
   RingCallChannelPrivate *priv = self->priv;
   if (!priv->originating)
     g_object_set(self, "originating", TRUE, NULL);
-  if (!priv->closing)
-    ring_call_channel_remote_pending(self, priv->peer_handle, "Call created");
 }
 
 static void on_modem_call_state_mo_alerting(RingCallChannel *self)
 {
-  RingCallChannelPrivate *priv = self->priv;
-
-  ring_call_channel_remote_pending(self, priv->peer_handle, "Call alerting");
-  /* TODO signal ringing */
-
-#if 0
-
-  ring_update_call_state(self,
-    TP_CHANNEL_CALL_STATE_RINGING,
-    TP_CHANNEL_CALL_STATE_QUEUED);
-#endif
+  ring_call_channel_set_peer_flags (self, TP_CALL_MEMBER_FLAG_RINGING, TRUE);
 }
 
 static void on_modem_call_state_waiting(RingCallChannel *self)
@@ -1937,46 +1507,7 @@ ring_call_channel_send_dialstring(RingCallChannel *self,
 static void on_modem_call_state_active(RingCallChannel *self)
 {
   RingCallChannelPrivate *priv = self->priv;
-  TpGroupMixin *mixin = TP_GROUP_MIXIN(self);
   TpHandle actor;
-
-  if (tp_handle_set_size(mixin->local_pending) ||
-    tp_handle_set_size(mixin->remote_pending)) {
-    char const *message = "Call answered";
-    TpHandle who = 0;
-    TpIntSet *add = tp_intset_new();
-
-    if (tp_handle_set_size(mixin->local_pending))
-      who = mixin->self_handle;
-    else if (tp_handle_set_size(mixin->remote_pending))
-      who = priv->peer_handle;
-
-    if (self->priv->accepted)
-      message = self->priv->accepted;
-
-    tp_intset_add(add, mixin->self_handle);
-    if (priv->peer_handle)
-      tp_intset_add(add, priv->peer_handle);
-
-    tp_group_mixin_change_members((GObject *)self,
-      message,
-      add, NULL, NULL, NULL,
-      who, 0);
-    tp_intset_destroy(add);
-
-    /* Allow removal, deny rescind and adding  */
-    tp_group_mixin_change_flags((GObject *)self,
-      TP_CHANNEL_GROUP_FLAG_CAN_REMOVE,
-      TP_CHANNEL_GROUP_FLAG_CAN_RESCIND |
-      TP_CHANNEL_GROUP_FLAG_CAN_ADD);
-  }
-
-/* TODO unsure we unset the flags */
-#if 0
-  ring_update_call_state(self, 0,
-    TP_CHANNEL_CALL_STATE_RINGING |
-    TP_CHANNEL_CALL_STATE_QUEUED);
-#endif
 
   if (priv->dial2nd) {
     /* p equals 0b1100, 0xC, or "DTMF Control Digits Separator" in the 3GPP
@@ -2040,7 +1571,7 @@ on_modem_call_state_mo_release(RingCallChannel *self,
     else {
       /* Call cancelled by MO but did not come from GSM; likely intentional */
       message = "";
-      actor = TP_GROUP_MIXIN(self)->self_handle;
+      actor = tp_base_channel_get_self_handle (TP_BASE_CHANNEL (self));
       reason = 0;
       details = 0;
     }
@@ -2162,44 +1693,14 @@ ring_call_channel_released(RingCallChannel *self,
   GError *error,
   char const *debug)
 {
-  TpIntSet *removed;
   char *dbus_error = NULL;
 
   if (self->priv->released)
     return;
   self->priv->released = 1;
 
-/* TODO set to release */
-#if 0
-  ring_update_call_state(self, 0,
-    TP_CHANNEL_CALL_STATE_RINGING |
-    TP_CHANNEL_CALL_STATE_QUEUED |
-    TP_CHANNEL_CALL_STATE_HELD);
-#endif
-
-  /* update flags accordingly -- deny adding/removal/rescind */
-  tp_group_mixin_change_flags((GObject *)self, 0,
-    TP_CHANNEL_GROUP_FLAG_CAN_ADD |
-    TP_CHANNEL_GROUP_FLAG_CAN_REMOVE |
-    TP_CHANNEL_GROUP_FLAG_CAN_RESCIND);
-
   if (error)
     dbus_error = modem_error_fqn(error);
-
-  removed = tp_intset_new();
-  tp_intset_add(removed, TP_GROUP_MIXIN(self)->self_handle);
-  tp_intset_add(removed, self->priv->peer_handle);
-
-  ring_util_group_change_members(self,
-    NULL, removed, NULL, NULL,
-    actor ? "actor" : "", G_TYPE_UINT, actor,
-    reason ? "change-reason" : "", G_TYPE_UINT, reason,
-    message ? "message" : "", G_TYPE_STRING, message,
-    dbus_error ? "error" : "", G_TYPE_STRING, dbus_error,
-    "debug-message", G_TYPE_STRING, debug,
-    NULL);
-
-  tp_intset_destroy(removed);
 
   if (self->priv->member.conference) {
     ring_conference_channel_emit_channel_removed(
@@ -2207,6 +1708,17 @@ ring_call_channel_released(RingCallChannel *self,
       message, actor, reason);
     /* above emit calls ring_member_channel_left() */
     g_assert(self->priv->member.conference == NULL);
+  }
+
+  /* In case of error END it explictilty */
+  if (tp_base_call_channel_get_state (TP_BASE_CALL_CHANNEL (self))
+      != TP_CALL_STATE_ENDED) {
+    tp_base_call_channel_set_state (TP_BASE_CALL_CHANNEL (self),
+      TP_CALL_STATE_ENDED,
+      actor,
+      error == NULL ?  TP_CALL_STATE_CHANGE_REASON_PROGRESS_MADE : TP_CALL_STATE_CHANGE_REASON_INTERNAL_ERROR,
+      dbus_error != NULL ? dbus_error : "",
+      debug != NULL ? debug : "");
   }
 
   g_free(dbus_error);
@@ -2367,7 +1879,7 @@ ring_member_channel_release(RingMemberChannel *iface,
   g_assert(message);
 
   priv->release.message = g_strdup(message ? message : "Call Released");
-  priv->release.actor = TP_GROUP_MIXIN(iface)->self_handle;
+  priv->release.actor = tp_base_channel_get_self_handle (TP_BASE_CHANNEL (self));
   priv->release.reason = reason;
 
   modem_call_request_release(self->call_instance, NULL, NULL);
@@ -2389,7 +1901,7 @@ ring_member_channel_joined(RingMemberChannel *iface,
     ring_conference_channel_emit_channel_removed(
       priv->member.conference, iface,
       "Joined new conference",
-      self->group.self_handle,
+      tp_base_channel_get_self_handle (TP_BASE_CHANNEL (self)),
       TP_CHANNEL_GROUP_CHANGE_REASON_INVITED);
     /* above emit calls ring_member_channel_left() */
     g_assert(priv->member.conference == NULL);

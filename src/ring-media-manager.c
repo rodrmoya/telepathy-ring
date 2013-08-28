@@ -806,9 +806,6 @@ ring_media_manager_emit_new_channel(RingMediaManager *self,
 
     tp_channel_manager_emit_new_channel(self,
       TP_EXPORTABLE_CHANNEL(channel), requests);
-
-    /* Emit Group and StreamedMedia signals */
-    ring_call_channel_emit_initial(RING_CALL_CHANNEL (channel));
   }
   else {
     DEBUG("new channel %p nick %s type %s failed with " GERROR_MSG_FMT,
@@ -861,10 +858,7 @@ ring_media_manager_outgoing_call(RingMediaManager *self,
 
   g_free(object_path);
 
-  if (initial_audio)
-    ring_call_channel_initial_audio(channel, self, request);
-  else
-    ring_media_manager_emit_new_channel(self, request, channel, NULL);
+  ring_media_manager_emit_new_channel(self, request, channel, NULL);
 
   return TRUE;
 }
