@@ -411,8 +411,6 @@ ring_call_channel_finalize(GObject *object)
   RingCallChannel *self = RING_CALL_CHANNEL(object);
   RingCallChannelPrivate *priv = self->priv;
 
-  tp_group_mixin_finalize(object);
-
   g_free(priv->emergency_service);
   g_free(priv->initial_emergency_service);
   g_free(priv->dial2nd);
@@ -573,7 +571,6 @@ ring_call_channel_class_init(RingCallChannelClass *klass)
     ring_call_channel_dbus_property_interfaces;
   tp_dbus_properties_mixin_class_init(object_class,
     G_STRUCT_OFFSET(RingCallChannelClass, dbus_properties_class));
-  tp_group_mixin_init_dbus_properties(object_class);
 
   g_object_class_install_property(
     object_class, PROP_ANON_MODES, ring_param_spec_anon_modes());
